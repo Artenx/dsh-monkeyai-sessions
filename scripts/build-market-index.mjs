@@ -73,8 +73,8 @@ const index = {
   format: 1,
   title: { en: 'MonkeyAI Sessions', zh: 'MonkeyAI 会话' },
   description: {
-    en: 'Remote MonkeyAI session plugins for DeepSeek Harness.',
-    zh: '面向 DeepSeek Harness 的远程 MonkeyAI 会话插件。',
+    en: 'Continue your MonkeyAI work from DeepSeek Harness.',
+    zh: '在 DeepSeek Harness 中接着做 MonkeyAI 里的工作。',
   },
   metadata: {
     categories: {
@@ -92,7 +92,7 @@ const index = {
     title: { en: 'MonkeyAI Sessions', zh: 'MonkeyAI 会话' },
     description: {
       en: manifest.description,
-      zh: '在 DSH 中浏览和操作远程 MonkeyAI 会话：完整历史、实时发送、停止回合、切换模型。',
+      zh: '在 DSH 里直接读取和查看 MonkeyAI 中的会话，并下发新指令，无缝接续之前在 MonkeyAI 客户端上的工作。支持完整历史、实时回复、停止回合与切换模型。',
     },
     icon,
     author: typeof manifest.author === 'string' ? manifest.author : manifest.author?.name,

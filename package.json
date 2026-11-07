@@ -1,7 +1,7 @@
 {
   "name": "dsh-monkeyai-sessions",
   "version": "0.1.0",
-  "description": "Browse and drive remote MonkeyAI sessions from DeepSeek Harness: full history, live prompts, stop, and model switching",
+  "description": "Read and continue your MonkeyAI conversations inside DeepSeek Harness: browse session history and send new instructions to pick up exactly where you left off in the MonkeyAI client",
   "type": "module",
   "license": "MIT",
   "author": "Artenx",

@@ -1,6 +1,10 @@
 # DSH MonkeyAI Sessions
 
-A DeepSeek Harness plugin for viewing and interacting with sessions owned by a remote MonkeyAI client. The first version uses the MonkeyAI OAuth authorization-code flow with PKCE. DSH stores the resulting grant in its credential store.
+Read and continue your MonkeyAI conversations inside DeepSeek Harness.
+
+Browse the sessions on your MonkeyAI devices, open one to read its full conversation history, and send new instructions to carry on the work you started in the MonkeyAI client — no copy-pasting context, no restarting the task. Replies stream back live, and you can stop a running turn or switch models without leaving DSH.
+
+Authorization uses the MonkeyAI OAuth authorization-code flow with PKCE; DSH stores the resulting grant in its credential store.
 
 ## Development
 
