@@ -293,6 +293,7 @@ function RemoteSessionPage({ api }) {
   const streamRef = useRef(null)
   const historyLoadedRef = useRef(false)
   const lastDraftRef = useRef('')
+  const authWindowRef = useRef(null)
   const eventsRef = useRef(null)
   const prevScrollHeightRef = useRef(null)
   const title = useMemo(() => {
@@ -360,13 +361,45 @@ function RemoteSessionPage({ api }) {
       } else {
         setStatus('Approve access, then paste the callback URL')
       }
-      window.open(result.authorizationUrl, '_blank', 'noopener,noreferrer')
+      // Keep the opener so the loopback page can post the callback back.
+      // Without it the browser cannot return the code automatically.
+      authWindowRef.current = window.open(result.authorizationUrl, '_blank')
     } catch (reason) {
       setError(errorText(reason))
     } finally {
       setLoading(false)
     }
   }
+
+  // The Host's loopback listener is unreachable when the browser runs on a
+  // different machine than DSH. Its callback page posts the URL here instead,
+  // and the Host performs the token exchange through completeAuthorization.
+  useEffect(() => {
+    if (!authorizationRequestId || authorizationMode !== 'loopback') return undefined
+    const onMessage = event => {
+      const data = event.data
+      if (!data || data.source !== 'monkeyai-dsh-oauth' || typeof data.callbackUrl !== 'string') return
+      const expected = new URL(authorizationUrl, window.location.href)
+      let callback
+      try { callback = new URL(data.callbackUrl) } catch { return }
+      if (!['127.0.0.1', 'localhost', '[::1]'].includes(callback.hostname)) return
+      if (callback.pathname !== '/oauth/callback') return
+      if (callback.searchParams.get('state') !== expected.searchParams.get('state')) return
+      void unwrap(api.completeAuthorization({ requestId: authorizationRequestId, callbackUrl: data.callbackUrl }))
+        .then(account => {
+          adoptAccount(account)
+          setAuthorizationRequestId('')
+          setAuthorizationUrl('')
+          setAuthorizationMode('')
+          setCallbackUrl('')
+          authWindowRef.current?.close?.()
+          authWindowRef.current = null
+        })
+        .catch(reason => setError(errorText(reason)))
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [api, authorizationRequestId, authorizationMode, authorizationUrl])
 
   useEffect(() => {
     if (!authorizationRequestId || authorizationMode !== 'loopback') return undefined
@@ -807,19 +840,21 @@ function RemoteSessionPage({ api }) {
               h('a', { href: authorizationUrl, target: '_blank', rel: 'noopener noreferrer', style: { color: t.accent, fontWeight: 600, fontSize: 12 } }, 'Open page'),
               h('button', { type: 'button', style: style.button, onClick: copyAuthorizationUrl }, copied ? 'Copied' : 'Copy link'))),
           authorizationMode === 'loopback'
-            ? h('li', null, 'Desktop: completes automatically. Mobile: copy the URL from the failed 127.0.0.1 page and paste it below.')
+            ? h('li', null, 'Approve in the browser - this panel completes automatically. If the browser cannot return to DSH, copy the callback URL below.')
             : h('li', null, 'After approving, the browser shows the monkeyai-desktop:// callback - copy its full address-bar URL and paste it below.')),
-        h('div', { style: style.row },
-          h('input', {
-            type: 'url',
-            value: callbackUrl,
-            placeholder: authorizationMode === 'loopback'
-              ? 'http://127.0.0.1:PORT/oauth/callback?code=...&state=...'
-              : 'monkeyai-desktop://oauth/callback?code=...&state=...',
-            style: { ...style.input, flex: '1 1 260px' },
-            onChange: event => setCallbackUrl(event.target.value),
-          }),
-          h('button', { type: 'button', style: style.primaryButton, disabled: loading || !callbackUrl, onClick: completeAuthorization }, 'Complete authorization')))
+        h('details', { style: style.details },
+          h('summary', { style: style.summary }, 'Automatic completion did not finish? Paste the callback'),
+          h('div', { style: { ...style.row, paddingTop: 8 } },
+            h('input', {
+              type: 'url',
+              value: callbackUrl,
+              placeholder: authorizationMode === 'loopback'
+                ? 'http://127.0.0.1:PORT/oauth/callback?code=...&state=...'
+                : 'monkeyai-desktop://oauth/callback?code=...&state=...',
+              style: { ...style.input, flex: '1 1 260px' },
+              onChange: event => setCallbackUrl(event.target.value),
+            }),
+            h('button', { type: 'button', style: style.primaryButton, disabled: loading || !callbackUrl, onClick: completeAuthorization }, 'Complete authorization'))))
       : h(React.Fragment, null,
         h('h2', { style: style.sectionTitle }, 'Connect MonkeyAI'),
         h(Field, { labelText: 'MonkeyAI server origin' },

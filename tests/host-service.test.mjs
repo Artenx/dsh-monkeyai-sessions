@@ -149,8 +149,7 @@ test('dispose clears all state', async () => {
   assert.equal(service.pendingAuthorizations.size, 0)
 })
 
-test('loopback authorization captures the browser callback and completes automatically', async () => {
-  const key = `dsh-monkeyai-sessions:${ACCOUNT_ID}`
+test('loopback callback serves a relay page and completes when the panel returns the URL', async () => {
   const credentials = createCredentialsStub()
   const service = new MonkeyAIRemoteService({ credentials, invocation: undefined })
   const realFetch = globalThis.fetch
@@ -174,14 +173,19 @@ test('loopback authorization captures the browser callback and completes automat
     const pendingAuth = [...service.pendingAuthorizations.values()][0]
     const callbackUrl = `http://127.0.0.1:${port}/oauth/callback?code=auth-code-123&state=${encodeURIComponent(pendingAuth.auth.state)}`
 
+    // The Host listener hands the callback to the panel instead of exchanging
+    // it, because a remote browser's loopback is not this machine.
     const response = await realFetch(callbackUrl)
     assert.equal(response.status, 200)
-    assert.match(await response.text(), /Return to the DSH panel/)
+    const page = await response.text()
+    assert.match(page, /monkeyai-dsh-oauth/)
+    assert.match(page, /postMessage/)
+    assert.equal((await service.authorizationStatus({ requestId: start.requestId })).status, 'pending')
 
-    const status = await service.authorizationStatus({ requestId: start.requestId })
-    assert.equal(status.status, 'completed')
-    assert.equal(status.account.serverOrigin, SERVER_ORIGIN)
-    const stored = await credentials.readRecord(`dsh-monkeyai-sessions:${status.account.accountId}`)
+    // The panel receives the postMessage and completes the exchange.
+    const account = await service.completeAuthorization({ requestId: start.requestId, callbackUrl })
+    assert.equal(account.serverOrigin, SERVER_ORIGIN)
+    const stored = await credentials.readRecord(`dsh-monkeyai-sessions:${account.accountId}`)
     assert.equal(stored?.payload?.token?.accessToken, 'access-token-1234567890')
 
     assert.equal(tokenRequests.length, 1)

@@ -34,8 +34,52 @@ function grantKey(accountId) {
   return credentialKey(PACKAGE_NAME, accountId)
 }
 
+// The endpoint directory carries `status: 'online' | 'offline'`; older
+// servers only expose the `online` boolean. Prefer the explicit status.
+function endpointStatus(item) {
+  const status = typeof item?.status === 'string' ? item.status.toLowerCase() : ''
+  if (status === 'online' || status === 'offline') return status
+  if (status !== '') return status
+  return item?.online === true ? 'online' : 'offline'
+}
+
 // Grants stored before the plugin was renamed from dsh-monkeyai-remote-sessions.
 const LEGACY_PACKAGE_NAME = 'dsh-monkeyai-remote-sessions'
+
+// Served on the Host's loopback callback. When the browser shares this machine
+// the exchange already happened server-side; when it does not (remote DSH Web),
+// this page hands the callback URL to the opening panel via postMessage so the
+// user never has to copy it. The URL is also shown for manual copying.
+function loopbackRelayPage(callbackUrl) {
+  const payload = JSON.stringify(callbackUrl).replace(/</g, '\\u003c')
+  const escaped = callbackUrl.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  return `<!doctype html><meta charset="utf-8"><title>MonkeyAI authorization</title>
+<style>body{font:14px/1.6 system-ui,sans-serif;max-width:640px;margin:48px auto;padding:0 20px;color:#1f2328}
+code{display:block;word-break:break-all;background:#f6f8fa;border:1px solid #e4e7ec;border-radius:8px;padding:10px;font-size:12px}
+button{margin-top:12px;padding:8px 14px;border-radius:8px;border:1px solid #2b5bd7;background:#3568e8;color:#fff;font-weight:600;cursor:pointer}</style>
+<h2>Completing authorization&hellip;</h2>
+<p id="msg">Returning to the DSH panel.</p>
+<details><summary>Copy the callback manually</summary><code id="url">${escaped}</code><button id="copy" type="button">Copy</button></details>
+<script>
+(function(){
+  var url = ${payload};
+  try {
+    if (window.opener) {
+      window.opener.postMessage({ source: 'monkeyai-dsh-oauth', callbackUrl: url }, '*');
+      document.getElementById('msg').textContent = 'Authorization sent to the DSH panel. You can close this tab.';
+      setTimeout(function(){ window.close(); }, 800);
+      return;
+    }
+  } catch (e) {}
+  document.getElementById('msg').textContent = 'Copy the callback URL below into the DSH panel to finish.';
+  document.querySelector('details').open = true;
+  document.getElementById('copy').addEventListener('click', function(){
+    navigator.clipboard && navigator.clipboard.writeText(url);
+    this.textContent = 'Copied';
+  });
+})();
+</script>`
+}
 
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -237,6 +281,16 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
       res.end('<!doctype html><meta charset="utf-8"><title>MonkeyAI authorization</title><p>This authorization request is no longer active. Restart it from the DSH panel.</p>')
       return
     }
+    // The browser may run on a different machine than this Host (DSH Web
+    // served remotely), so its 127.0.0.1 is not this listener. Serve a page
+    // that hands the callback to the opening panel via postMessage; the panel
+    // then completes the exchange through completeAuthorization. The same
+    // page offers manual copying when the opener is unavailable.
+    if (url.searchParams.get('code') || url.searchParams.get('error')) {
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', connection: 'close' })
+      res.end(loopbackRelayPage(url.toString()))
+      return
+    }
     this.exchangeAuthorization(pending.auth, url.toString())
       .then(account => {
         this.settlePending(requestId, { status: 'completed', account })
@@ -321,7 +375,10 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
         displayName: String(item.alias ?? item.display_name ?? item.machine_id ?? 'MonkeyAI device'),
         platform: String(item.platform ?? 'unknown'),
         arch: String(item.arch ?? 'unknown'),
-        status: item.online === true ? 'online' : 'offline',
+        // The endpoint directory reports liveness in `status`; the detail
+        // endpoint's `online` boolean tracks a different (control-plane)
+        // channel and stays false for devices that serve sessions fine.
+        status: endpointStatus(item),
         stale: false,
       })).filter(item => item.machineId !== ''),
       total: Number.isSafeInteger(response.total) && response.total >= 0 ? response.total : items.length,
