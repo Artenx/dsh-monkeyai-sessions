@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MonkeyAI Remote Sessions - DSH Panel Preview</title>
+  <style>
+    :root {
+      --border: #e4e7ec;
+      --surface: #ffffff;
+      --accent: #3568e8;
+      --danger: #c2372c;
+      color-scheme: light;
+    }
+    body {
+      margin: 0;
+      background: #f5f6f8;
+      color: #1f2328;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+    #banner {
+      padding: 10px 24px;
+      font-size: 12px;
+      letter-spacing: 0.4px;
+      background: #1f2937;
+      color: #e5e9f0;
+      border-bottom: 1px solid #111827;
+      opacity: 0.95;
+    }
+    #banner strong { color: #9db9f7; }
+    #root { min-height: calc(100vh - 40px); }
+  </style>
+</head>
+<body>
+  <div id="banner">DSH panel preview - mock host with a demo MonkeyAI account, two devices and one permission request. <strong>Refresh</strong> loads devices and sessions in one click; opening a session replays history, tool calls and an approval card; <strong>Connect</strong> shows the authorization steps.</div>
+  <div id="root"></div>
+  <script src="./preview-bundle.js"></script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+node_modules/
+*.tgz
+client.js
+lib/
+tests/.remote-spec.loaded.cjs
