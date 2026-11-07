@@ -36,6 +36,20 @@ Full conversation history is loaded over the runtime's HTTP read channel (`POST 
 
 ## Installation
 
+From npm, once published:
+
+```sh
+dsh plugin --profile web add dsh-monkeyai-sessions
+```
+
+From the plugin market index: enable **Custom plugin indexes** under Plugins → Experimental plugins, open **Discover**, and add this index source:
+
+```
+https://artenx.github.io/dsh-monkeyai-sessions/index.json
+```
+
+From a checkout:
+
 ```sh
 npm install
 npm run build
@@ -44,3 +58,22 @@ dsh plugin --profile web add ./dsh-monkeyai-sessions-0.1.0.tgz
 ```
 
 Verified against a real DSH `0.2.2-rc.1` web profile and a live MonkeyAI runtime: authorization, full history loading, prompt delivery, model switching, and turn cancellation all work end to end.
+
+## Publishing
+
+The package declares a DSH bundle (`dsh.bundle.patch`), a web Client (`dsh.client`), and `engines.dsh`. Host-provided modules resolve through the running DSH installation, so the only peer dependency is `@deepseek-ai/cordis`.
+
+```sh
+# Build the Client bundle and the market index
+npm run build
+npm run build:market
+
+# Publish the package (requires an npm account with publish rights)
+npm publish --access public
+```
+
+`scripts/build-market-index.mjs` reads published versions and their publish times from the npm registry, falling back to the current `package.json` version before the first release. The resulting `market/index.json` follows plugin market index format 1 and is deployed to GitHub Pages by `.github/workflows/market-index.yml`. Set `MARKET_INDEX_URL` to override the printed index address.
+
+## License
+
+MIT

@@ -1,52 +1,67 @@
 {
   "name": "dsh-monkeyai-sessions",
   "version": "0.1.0",
-  "description": "DeepSeek Harness panel for authorized MonkeyAI remote sessions",
+  "description": "Browse and drive remote MonkeyAI sessions from DeepSeek Harness: full history, live prompts, stop, and model switching",
   "type": "module",
+  "license": "MIT",
+  "author": "Artenx",
+  "homepage": "https://github.com/Artenx/dsh-monkeyai-sessions#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Artenx/dsh-monkeyai-sessions.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Artenx/dsh-monkeyai-sessions/issues"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "monkeyai",
+    "remote-sessions",
+    "acp"
+  ],
+  "icon": "./assets/icon.svg",
   "main": "./src/index.js",
   "exports": {
     ".": "./src/index.js",
     "./client": "./client.js",
     "./remote": "./src/remote.js",
+    "./icon": "./assets/icon.svg",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
   "files": [
+    "assets/icon.svg",
     "client.js",
     "cordis.patch.yml",
     "lib/client-runtime.cjs",
     "src/**/*.js",
     "src/**/*.mjs",
     "scripts/build-client.mjs",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "pretest": "npm run build",
     "test": "node --test tests/*.test.mjs",
     "build": "node scripts/build-client.mjs",
-    "build:client": "node scripts/build-client.mjs"
+    "build:client": "node scripts/build-client.mjs",
+    "build:market": "node scripts/build-market-index.mjs"
   },
   "engines": {
     "node": ">=24.9.0",
     "dsh": ">=0.2.2-rc.1 <0.3.0"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-api-gateway": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-client-ui-layout": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-client-ui-slots": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-credentials": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-typert-protocol": "0.2.2-rc.1",
-    "react": "18.2.0",
-    "zod": "4.4.3"
+    "@deepseek-ai/cordis": "~4.1.0"
   },
   "devDependencies": {
     "esbuild": "^0.25.0"
   },
   "dsh": {
+    "manifestVersion": 1,
     "bundle": {
-      "patch": "./cordis.patch.yml",
-      "listedByDefault": false
+      "patch": "./cordis.patch.yml"
     },
     "client": {
       "platform": "web",
