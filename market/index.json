@@ -65,10 +65,20 @@
           "verified"
         ],
         "sortKeys": {
-          "updated": 1794108353
+          "updated": 1794114007
         }
       },
       "versions": [
+        {
+          "version": "0.1.2",
+          "publishTimestamp": 1794114007,
+          "engines": {
+            "dsh": ">=0.2.2-rc.1 <0.3.0"
+          },
+          "source": {
+            "type": "npm"
+          }
+        },
         {
           "version": "0.1.1",
           "publishTimestamp": 1794108353,
