@@ -32,8 +32,10 @@ async function publishedVersions() {
     if (!response.ok) return undefined
     const data = await response.json()
     const times = data.time ?? {}
+    // List stable releases only. Prereleases such as npm's own staging
+    // artifacts are not what a market visitor should install by default.
     const versions = Object.keys(data.versions ?? {})
-      .filter(version => !version.includes('-') || times[version])
+      .filter(version => /^\d+\.\d+\.\d+$/.test(version) && times[version])
       .map(version => ({
         version,
         publishTimestamp: Math.floor(Date.parse(times[version] ?? '') / 1000) || Math.floor(Date.now() / 1000),
