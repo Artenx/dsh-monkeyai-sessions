@@ -689,6 +689,7 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
     let reconnectsUsed = 0
     const MAX_REPLAY_RECONNECTS = 32
     let ticketValue
+    let ticketHttpBase
     let loadCompleted = false
     let currentLoadedModel = undefined
     const aborted = new Promise(resolve => {
@@ -726,10 +727,12 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
     // for close detection but suppressed from the event stream to avoid
     // duplicating text the projection already folded in.
     const httpHistoryMessageIds = new Set()
-    // When the HTTP channel delivered the full history, the ACP replay adds
-    // nothing: skip session/load entirely and mount the session live.
+    // The full history was loaded over HTTP. Keep the message ids so ACP
+    // replay duplicates can be suppressed and history_changed notifications
+    // can fetch only newly persisted snapshots.
     let httpHistoryComplete = false
     let httpConfigurationRevision
+    let historyRefreshPromise = Promise.resolve()
     // history_loaded can be triggered by both the HTTP history channel and
     // the ACP load path; the stream must carry it exactly once.
     let historyLoadedEmitted = false
@@ -737,6 +740,26 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
       if (historyLoadedEmitted) return
       historyLoadedEmitted = true
       emit({ type: 'history_loaded', sessionId: selectedSession, ...(model === undefined ? {} : { model }) })
+    }
+    const refreshPersistedHistory = async changedMessageId => {
+      if (!ticketHttpBase || !ticketValue) return
+      const delta = await fetchSessionHistoryDelta({
+        httpBase: ticketHttpBase,
+        ticket: ticketValue,
+        sessionId: selectedSession,
+        signal,
+        knownMessageIds: httpHistoryMessageIds,
+        changedMessageId,
+      })
+      if (Number.isSafeInteger(delta.configurationRevision)) {
+        httpConfigurationRevision = delta.configurationRevision
+      }
+      for (const message of delta.messages) {
+        httpHistoryMessageIds.add(message.id)
+        for (const frame of historyMessageToFrames(selectedSession, message, delta.toolCalls, { snapshot: true })) {
+          await emit(frame)
+        }
+      }
     }
 
     function replayKey(params) {
@@ -784,6 +807,22 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
             data: event.params,
           })
         } else {
+          if (event.method === '_monkeyai/session/history_changed' && httpHistoryComplete && ticketHttpBase) {
+            // Large live message bodies are persisted instead of streamed as
+            // chunks. Match the desktop client: refresh the newest HTTP pages
+            // and merge the resulting message snapshots into the projection.
+            historyRefreshPromise = historyRefreshPromise.then(() => refreshPersistedHistory(
+              typeof event.params?.messageId === 'string' ? event.params.messageId : undefined,
+            )).catch(error => {
+              if (!signal.aborted) emit({
+                type: 'error',
+                sessionId: selectedSession,
+                code: 'history_refresh_failed',
+                message: error instanceof Error ? error.message : '刷新实时会话内容失败',
+              })
+            })
+            return
+          }
         if (withLoad && !loadCompleted) {
           const key = replayKey(event.params)
             if (key !== null) {
@@ -795,7 +834,7 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
           }
           // Suppress replayed messages already delivered over HTTP, on every
           // connection generation (re-mounts replay the same window again).
-          if (withLoad) {
+          if (withLoad && event.params?._meta?.replay === true) {
             const replayMessageId = (typeof event.params?._meta?.messageId === 'string' && event.params._meta.messageId !== '')
               ? event.params._meta.messageId
               : (typeof event.params?.update?.messageId === 'string' ? event.params.update.messageId : '')
@@ -887,7 +926,22 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
       const initialized = await acp.request('initialize', {
         protocolVersion: 1,
         clientInfo: ACP_CLIENT_INFO,
-        clientCapabilities: {},
+        // Match the MonkeyAI desktop client. historyHTTP opts this connection
+        // into HTTP-backed snapshots and history_changed notifications;
+        // session/load then mounts the live subscription without replaying the
+        // oversized history over ACP.
+        clientCapabilities: {
+          _meta: {
+            messageSnapshots: true,
+            interactionReplies: true,
+            historyHTTP: true,
+            queueHTTP: true,
+            historyRefresh: true,
+            configHTTP: true,
+            stateHTTP: true,
+            interactionHTTP: true,
+          },
+        },
       }, { signal })
       if (initialized?.agentCapabilities?.loadSession !== true) {
         throw new Error('MonkeyAI runtime does not advertise ACP session history loading')
@@ -898,14 +952,11 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
         return
       }
       emit({ type: 'ready', sessionId: selectedSession })
-      if (httpHistoryComplete) {
-        // History came over HTTP; prompts and model switches work on a plain
-        // initialized connection. Skip session/load: its bounded replay
-        // always dies mid-stream and would churn reconnects for nothing.
-        loadCompleted = true
-        return
-      }
       try {
+        // With historyHTTP advertised this mounts the session for live
+        // notifications while leaving persisted history reads to the HTTP
+        // cursor API above. Older runtimes may still replay a bounded window;
+        // the message-id filter suppresses those duplicate snapshots.
         const loadResult = await acp.request('session/load', {
           sessionId: selectedSession,
           cwd,
@@ -914,6 +965,13 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
         loadCompleted = true
         currentLoadedModel = typeof loadResult?._meta?.model === 'string' ? loadResult._meta.model : currentLoadedModel
         emitHistoryLoaded(currentLoadedModel)
+        // Close the gap between the initial full-history read and mounting the
+        // live subscription. A turn can start during that interval; snapshots
+        // replace any partial chunks that arrived before session/load resolved.
+        if (httpHistoryComplete) {
+          historyRefreshPromise = historyRefreshPromise.then(() => refreshPersistedHistory())
+          await historyRefreshPromise
+        }
       } catch (error) {
         if (signal?.aborted) throw error
         const message = error instanceof Error ? error.message : String(error)
@@ -958,6 +1016,7 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
       const token = await this.refreshAccessToken(accountId, signal)
       const ticket = await this.requestConnectionTicket(accountId, grantRef, token, target, { signal })
       ticketValue = ticket.ticket
+      ticketHttpBase = ticket.httpBase
       if (signal.aborted) throw signal.reason ?? new Error('远程会话已取消')
 
       // Load the full history over the runtime's HTTP read channel before the
@@ -1312,7 +1371,7 @@ function historyMessageText(parts) {
 // Converts one history message snapshot into the same notification frame
 // shape the ACP replay produces, so the shared projection layer renders both
 // identically. Message ids match ACP replay messageIds (u-turn-N / a-turn-N).
-function historyMessageToFrames(sessionId, message, toolCallsById) {
+function historyMessageToFrames(sessionId, message, toolCallsById, { snapshot = false } = {}) {
   const frames = []
   const meta = { messageId: message.id, replay: true }
   const emitUpdate = update => {
@@ -1326,16 +1385,47 @@ function historyMessageToFrames(sessionId, message, toolCallsById) {
     const content = fileLinks.length > 0
       ? [...(text === '' ? [] : [{ type: 'text', text }]), ...fileLinks]
       : (text === '' ? undefined : { type: 'text', text })
-    if (content !== undefined) emitUpdate({ sessionUpdate: 'user_message_chunk', content })
+    if (content !== undefined) emitUpdate({ sessionUpdate: snapshot ? 'user_message' : 'user_message_chunk', content })
     return frames
   }
-  for (const part of Array.isArray(message.parts) ? message.parts : []) {
+  const parts = Array.isArray(message.parts) ? message.parts : []
+  const snapshotThought = snapshot
+    ? parts.filter(part => part?.type === 'thought' && typeof part.text === 'string').map(part => part.text).join('')
+    : ''
+  const snapshotText = snapshot
+    ? parts.filter(part => part?.type === 'text' && typeof part.text === 'string').map(part => part.text)
+      .concat(parts.filter(part => part?.type === 'error' && typeof part.reason === 'string').map(part => `[error] ${part.reason}`)).join('')
+    : ''
+  let snapshotThoughtEmitted = false
+  let snapshotTextEmitted = false
+  for (const part of parts) {
     if (part?.type === 'thought' && typeof part.text === 'string' && part.text !== '') {
-      emitUpdate({ sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: part.text } })
+      if (snapshot) {
+        if (!snapshotThoughtEmitted && snapshotThought !== '') {
+          emitUpdate({ sessionUpdate: 'agent_thought', content: { type: 'text', text: snapshotThought } })
+          snapshotThoughtEmitted = true
+        }
+      } else {
+        emitUpdate({ sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: part.text } })
+      }
     } else if (part?.type === 'text' && typeof part.text === 'string' && part.text !== '') {
-      emitUpdate({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: part.text } })
+      if (snapshot) {
+        if (!snapshotTextEmitted && snapshotText !== '') {
+          emitUpdate({ sessionUpdate: 'agent_message', content: { type: 'text', text: snapshotText } })
+          snapshotTextEmitted = true
+        }
+      } else {
+        emitUpdate({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: part.text } })
+      }
     } else if (part?.type === 'error' && typeof part.reason === 'string' && part.reason !== '') {
-      emitUpdate({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: `[error] ${part.reason}` } })
+      if (snapshot) {
+        if (!snapshotTextEmitted && snapshotText !== '') {
+          emitUpdate({ sessionUpdate: 'agent_message', content: { type: 'text', text: snapshotText } })
+          snapshotTextEmitted = true
+        }
+      } else {
+        emitUpdate({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: `[error] ${part.reason}` } })
+      }
     } else if (part?.type === 'file' && typeof part.uri === 'string') {
       emitUpdate({ sessionUpdate: 'agent_message_chunk', content: { type: 'resource_link', name: part.name, uri: part.uri } })
     } else if (part?.type === 'tool_call' && typeof part.toolCallId === 'string') {
@@ -1387,6 +1477,47 @@ async function fetchFullSessionHistory({ httpBase, ticket, sessionId, signal, on
     }
   }
   return { messageIds: [...seenIds], count: seenIds.size, configurationRevision }
+}
+
+// Refresh only the newest pages after a _monkeyai/session/history_changed
+// notification. Pages are oldest-to-newest internally and arrive newest-first;
+// stop once a known boundary is reached, retaining a changed message id even
+// when it was already present (the runtime may have replaced a partial body).
+async function fetchSessionHistoryDelta({ httpBase, ticket, sessionId, signal, knownMessageIds, changedMessageId, maxPages = 200 }) {
+  const pages = []
+  const seenIds = new Set()
+  const toolCalls = {}
+  let cursor
+  let configurationRevision
+  let foundBoundary = false
+  let foundChangedMessage = !changedMessageId
+  for (let page = 0; page < maxPages; page += 1) {
+    const timeout = AbortSignal.any([AbortSignal.timeout(30_000), ...(signal ? [signal] : [])])
+    const result = await readSessionHistoryPage({ httpBase, ticket, sessionId, cursor, direction: 'older', signal: timeout })
+    if (Number.isSafeInteger(result.session?.configurationRevision)) configurationRevision = result.session.configurationRevision
+    const pageMessages = []
+    for (const message of result.messages) {
+      if (typeof message?.id !== 'string' || message.id === '') continue
+      const known = knownMessageIds.has(message.id)
+      const changed = message.id === changedMessageId
+      if (changed) foundChangedMessage = true
+      if ((!known || changed) && !seenIds.has(message.id)) {
+        seenIds.add(message.id)
+        pageMessages.push(message)
+      }
+      if (known && !changed) foundBoundary = true
+    }
+    pages.push(pageMessages)
+    Object.assign(toolCalls, result.toolCalls ?? {})
+    if (foundBoundary && foundChangedMessage) break
+    cursor = typeof result.olderCursor === 'string' && result.olderCursor !== '' ? result.olderCursor : undefined
+    if (!cursor || result.messages.length === 0) break
+  }
+  return {
+    messages: pages.reverse().flat(),
+    toolCalls,
+    configurationRevision,
+  }
 }
 
 function validateResponse(method, params, result) {

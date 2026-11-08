@@ -39,7 +39,7 @@ All three request `device:connect`, `session:read`, and `session:control` throug
 
 ## Sessions
 
-Full conversation history is loaded over the runtime's HTTP read channel (`POST {http_base}/read/session` with `_monkeyai/session/messages`, paginated by cursor) instead of the bounded ACP `session/load` replay, so long sessions show every turn including the latest replies. While a turn is running the composer shows a stop button that sends `session/cancel`; the model switcher uses `_monkeyai/session/model/set` on the live session connection. Assistant messages render lightweight markdown (code blocks, inline code, bold, headings, lists).
+Full conversation history is loaded over the runtime's HTTP read channel (`POST {http_base}/read/session` with `_monkeyai/session/messages`, paginated by cursor) instead of the bounded ACP `session/load` replay, so long sessions show every turn including the latest replies. After mounting the session with the same `historyHTTP` capabilities as the MonkeyAI client, the panel subscribes to ACP live updates: messages and assistant chunks started in the MonkeyAI desktop client appear as they stream, without refreshing. For large replies persisted by the runtime, `history_changed` triggers a cursor-based HTTP delta refresh and replaces any partial snapshot. While a turn is running the composer shows a stop button that sends `session/cancel`; the model switcher uses `_monkeyai/session/model/set` on the live session connection. Assistant messages render lightweight markdown (code blocks, inline code, bold, headings, lists).
 
 ## Installation
 
@@ -61,7 +61,7 @@ From a checkout:
 npm install
 npm run build
 npm pack
-dsh plugin --profile web add ./dsh-monkeyai-sessions-0.1.2.tgz
+dsh plugin --profile web add ./dsh-monkeyai-sessions-0.1.3.tgz
 ```
 
 Verified against a real DSH `0.2.2-rc.1` web profile and a live MonkeyAI runtime: authorization, full history loading, prompt delivery, model switching, and turn cancellation all work end to end.

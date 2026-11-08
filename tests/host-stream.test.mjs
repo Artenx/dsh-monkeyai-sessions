@@ -28,6 +28,8 @@ class FakeWebSocket extends EventTarget {
   static readSessionRequests = []
   static modelSetRequests = []
   static configurationRevision = 7
+  static initializeParams = []
+  static historyReadCount = 0
 
   constructor(url, protocols) {
     super()
@@ -122,8 +124,11 @@ function installAcpAgent() {
   FakeWebSocket.readSessionRequests = []
   FakeWebSocket.modelSetRequests = []
   FakeWebSocket.configurationRevision = 7
+  FakeWebSocket.initializeParams = []
+  FakeWebSocket.historyReadCount = 0
   FakeWebSocket.onClientMessage = (socket, message) => {
     if (message.method === 'initialize') {
+      FakeWebSocket.initializeParams.push(message.params)
       socket.serverSend({ jsonrpc: '2.0', id: message.id, result: {
         protocolVersion: 1,
         agentCapabilities: { loadSession: true },
@@ -131,8 +136,10 @@ function installAcpAgent() {
       return
     }
     if (message.method === 'session/load') {
+      socket.loadedSession = true
       socket.serverSend({ jsonrpc: '2.0', id: message.id, result: null })
       socket.serverSend({ jsonrpc: '2.0', method: 'session/update', params: {
+        _meta: { messageId: 'm1', replay: true },
         sessionId: 'history-session',
         update: { sessionUpdate: 'user_message_chunk', messageId: 'm1', content: { type: 'text', text: 'hello from history' } },
       } })
@@ -158,10 +165,19 @@ function installAcpAgent() {
     }
     if (message.method === 'session/prompt') {
       socket.serverSend({ jsonrpc: '2.0', id: message.id, result: {} })
-      socket.serverSend({ jsonrpc: '2.0', method: 'session/update', params: {
+      const promptText = message.params?.prompt?.[0]?.text ?? ''
+      const isExternal = promptText === 'external client prompt'
+      const update = { jsonrpc: '2.0', method: 'session/update', params: {
         sessionId: 'history-session',
-        update: { sessionUpdate: 'agent_message_chunk', messageId: 'm2', content: { type: 'text', text: 'working on it' } },
-      } })
+        _meta: { messageId: isExternal ? 'm-external' : 'm2' },
+        update: { sessionUpdate: 'agent_message_chunk', messageId: isExternal ? 'm-external' : 'm2', content: { type: 'text', text: isExternal ? 'reply from external client' : 'working on it' } },
+      } }
+      socket.serverSend(update)
+      // A prompt from another client is broadcast to connections which loaded
+      // this session, matching the runtime's live ACP subscription behavior.
+      for (const subscriber of FakeWebSocket.instances) {
+        if (subscriber !== socket && subscriber.loadedSession && !subscriber.closed) subscriber.serverSend(update)
+      }
     }
   }
   return async (url, init) => {
@@ -169,6 +185,23 @@ function installAcpAgent() {
     if (target.endsWith('/read/session')) {
       const body = JSON.parse(init.body)
       FakeWebSocket.readSessionRequests.push(body)
+      FakeWebSocket.historyReadCount += 1
+      if (FakeWebSocket.historyReadCount > 2) {
+        const refreshedMessage = FakeWebSocket.historyReadCount === 3
+          ? { id: 'm-catchup', role: 'assistant', parts: [{ type: 'text', text: 'turn from history catch-up' }] }
+          : { id: 'm-refresh', role: 'assistant', parts: [{ type: 'text', text: 'complete large reply from history refresh' }] }
+        return jsonResponse({
+          result: {
+            eventSeq: 11,
+            session: { id: 'history-session', configurationRevision: FakeWebSocket.configurationRevision },
+            messages: [
+              { id: 'n2', role: 'assistant', parts: [{ type: 'text', text: 'newer answer from http history' }] },
+              refreshedMessage,
+            ],
+            toolCalls: {},
+          },
+        })
+      }
       // Two pages: the first (cursor-less) returns the newest page with an
       // olderCursor; the second walks back to the oldest page.
       if (body.params?.cursor === 'cursor-page-1') {
@@ -237,12 +270,17 @@ test('followSession streams history and live notifications for the selected sess
     const consuming = collect(stream, frames, controller.signal)
 
     await waitFor(() => frames.some(frame => frame.type === 'history_loaded'), 'history_loaded')
+    const initCapabilities = FakeWebSocket.initializeParams[0]?.clientCapabilities?._meta
+    assert.equal(initCapabilities?.historyHTTP, true)
+    assert.equal(initCapabilities?.historyRefresh, true)
+    assert.ok(FakeWebSocket.instances[0].sent.some(message => message.method === 'session/load'))
     await waitFor(() => frames.some(frame => frame.type === 'notification'
       && frame.data?.update?.content?.text === 'hello from history'), 'history notification')
+    await waitFor(() => frames.some(frame => frame.data?._meta?.messageId === 'm-catchup'), 'post-mount history catch-up')
 
     // Full history arrives over the HTTP read channel before the ACP replay;
     // the replayed m1 chunk is suppressed as a duplicate of the HTTP snapshot.
-    assert.equal(FakeWebSocket.readSessionRequests.length, 2)
+    assert.equal(FakeWebSocket.readSessionRequests.length, 3)
     assert.equal(FakeWebSocket.readSessionRequests[0].method, '_monkeyai/session/messages')
     assert.equal(FakeWebSocket.readSessionRequests[1].params.cursor, 'cursor-page-1')
     assert.ok(frames.some(frame => frame.type === 'notification'
@@ -258,14 +296,49 @@ test('followSession streams history and live notifications for the selected sess
     const indexOfNewer = frames.findIndex(frame => frame.type === 'notification'
       && frame.data?.update?.content?.text === 'newer question from http history')
     assert.ok(indexOfOlder >= 0 && indexOfNewer > indexOfOlder)
+    assert.ok(frames.some(frame => frame.type === 'notification'
+      && frame.data?._meta?.messageId === 'm-catchup'
+      && frame.data?.update?.sessionUpdate === 'agent_message'
+      && frame.data?.update?.content?.text === 'turn from history catch-up'))
     assert.equal(frames.filter(frame => frame.type === 'notification'
       && frame.data?.update?.content?.text === 'hello from history').length, 1)
     assert.equal(frames.filter(frame => frame.type === 'history_loaded').length, 1)
+
+    // If the panel opens mid-turn, the HTTP snapshot may already contain a
+    // partial message. Non-replay chunks with that same message id must still
+    // pass through and append the remainder.
+    FakeWebSocket.instances[0].serverSend({ jsonrpc: '2.0', method: 'session/update', params: {
+      sessionId: 'history-session',
+      _meta: { messageId: 'm1', replay: false },
+      update: { sessionUpdate: 'agent_message_chunk', messageId: 'm1', content: { type: 'text', text: ' live continuation' } },
+    } })
+    await waitFor(() => frames.some(frame => frame.type === 'notification'
+      && frame.data?.update?.content?.text === ' live continuation'), 'live continuation of snapshot message')
 
     uplink.push({ type: 'prompt', text: 'run the task' })
     await waitFor(() => frames.some(frame => frame.type === 'delivery' && frame.data?.accepted), 'delivery accepted')
     await waitFor(() => frames.some(frame => frame.type === 'notification'
       && frame.data?.update?.content?.text === 'working on it'), 'live notification')
+
+    // A second MonkeyAI client sends into the same session. Its turn must be
+    // broadcast over the already loaded DSH subscription without a refresh.
+    const external = new FakeWebSocket('ws://external-client', ['monkeyai.v1'])
+    external.send(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: 1, clientInfo: { name: 'external', version: '0' }, clientCapabilities: {} } }))
+    external.send(JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'session/prompt', params: {
+      sessionId: 'history-session', prompt: [{ type: 'text', text: 'external client prompt' }],
+    } }))
+    await waitFor(() => frames.some(frame => frame.type === 'notification'
+      && frame.data?.update?.content?.text === 'reply from external client'), 'external live notification')
+
+    // Oversized replies are represented by a history_changed notification;
+    // refresh the HTTP cursor window and replace any partial message snapshot.
+    FakeWebSocket.instances[0].serverSend({ jsonrpc: '2.0', method: '_monkeyai/session/history_changed', params: {
+      sessionId: 'history-session', eventSeq: 11, messageId: 'm-refresh',
+    } })
+    await waitFor(() => frames.some(frame => frame.type === 'notification'
+      && frame.data?._meta?.messageId === 'm-refresh'
+      && frame.data?.update?.sessionUpdate === 'agent_message'
+      && frame.data?.update?.content?.text === 'complete large reply from history refresh'), 'HTTP history delta')
 
     const socket = FakeWebSocket.instances[0]
     assert.deepEqual(socket.protocols, ['monkeyai.v1', 'monkeyai.token.ticket-abc123def456'])
