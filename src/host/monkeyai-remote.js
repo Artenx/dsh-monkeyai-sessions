@@ -390,6 +390,45 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
     return this.exchangeAuthorization(auth, callbackUrl)
   }
 
+  // The runtime requires an expectedRevision on every configuration write and
+  // rejects a stale one with configuration_conflict. The MonkeyAI client (or
+  // another panel) can advance the revision at any time, so read the current
+  // value from the conflict payload — or from the HTTP session state when we
+  // have none — and retry instead of failing the switch.
+  async setSessionModel({ acp, sessionId, model, httpBase, ticket, revision, signal, onRevision }) {
+    let expected = revision
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (!Number.isSafeInteger(expected)) {
+        expected = await readSessionConfigurationRevision({ httpBase, ticket, sessionId, signal })
+      }
+      if (!Number.isSafeInteger(expected)) throw new Error('无法读取会话配置版本，暂时不能切换模型')
+      try {
+        const result = await acp.request('_monkeyai/session/model/set', {
+          sessionId,
+          model,
+          _meta: { expectedRevision: expected },
+        }, { signal, timeoutMs: 120_000 })
+        const next = result?._meta?.configurationRevision
+        if (Number.isSafeInteger(next)) onRevision(next)
+        return typeof result?.model === 'string' ? result.model : model
+      } catch (error) {
+        if (signal?.aborted) throw error
+        const current = error?.data?.configurationRevision
+        if (error?.data?.reason === 'configuration_conflict' && Number.isSafeInteger(current) && current !== expected) {
+          expected = current
+          onRevision(current)
+          continue
+        }
+        if (error?.data?.reason === 'configuration_version_required') {
+          expected = undefined
+          continue
+        }
+        throw error
+      }
+    }
+    throw new Error('会话配置持续被其他客户端修改，请重试切换模型')
+  }
+
   async exchangeAuthorization(auth, callbackUrl) {
     const callback = parseAuthorizationCallback(callbackUrl, auth)
     const tokens = await requestJson(auth.serverOrigin, '/oauth/token', {
@@ -977,14 +1016,16 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
 
             if (command.type === 'switch_model') {
               try {
-                const result = await currentAcp.request('_monkeyai/session/model/set', {
+                const model = await this.setSessionModel({
+                  acp: currentAcp,
                   sessionId: selectedSession,
                   model: command.model,
-                  ...(httpConfigurationRevision === undefined ? {} : { _meta: { expectedRevision: httpConfigurationRevision } }),
-                }, { signal, timeoutMs: 120_000 })
-                const nextRevision = result?._meta?.configurationRevision
-                if (Number.isSafeInteger(nextRevision)) httpConfigurationRevision = nextRevision
-                const model = typeof result?.model === 'string' ? result.model : command.model
+                  httpBase: ticket.httpBase,
+                  ticket: ticketValue,
+                  revision: httpConfigurationRevision,
+                  signal,
+                  onRevision: value => { httpConfigurationRevision = value },
+                })
                 currentLoadedModel = model
                 emit({ type: 'model_switched', sessionId: selectedSession, data: { model } })
               } catch (switchError) {
@@ -1221,6 +1262,16 @@ async function readHistoryBodyText(response, maxBytes = HISTORY_PAGE_MAX_BYTES) 
     offset += chunk.byteLength
   }
   return new TextDecoder().decode(joined)
+}
+
+// Reads the session's current configuration revision over the HTTP read
+// channel. Configuration writes must carry it, and the value changes whenever
+// any client edits the session.
+async function readSessionConfigurationRevision({ httpBase, ticket, sessionId, signal }) {
+  const timeout = AbortSignal.any([AbortSignal.timeout(20_000), ...(signal ? [signal] : [])])
+  const result = await readSessionHistoryPage({ httpBase, ticket, sessionId, limit: 1, signal: timeout })
+  const revision = result.session?.configurationRevision
+  return Number.isSafeInteger(revision) ? revision : undefined
 }
 
 async function readSessionHistoryPage({ httpBase, ticket, sessionId, cursor, direction, limit = 50, signal }) {

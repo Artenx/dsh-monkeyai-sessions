@@ -26,6 +26,8 @@ class FakeWebSocket extends EventTarget {
   static instances = []
   static onClientMessage = null
   static readSessionRequests = []
+  static modelSetRequests = []
+  static configurationRevision = 7
 
   constructor(url, protocols) {
     super()
@@ -118,6 +120,8 @@ function createService({ grant = createGrant(), uplinkQueue = new AsyncQueue() }
 function installAcpAgent() {
   FakeWebSocket.instances = []
   FakeWebSocket.readSessionRequests = []
+  FakeWebSocket.modelSetRequests = []
+  FakeWebSocket.configurationRevision = 7
   FakeWebSocket.onClientMessage = (socket, message) => {
     if (message.method === 'initialize') {
       socket.serverSend({ jsonrpc: '2.0', id: message.id, result: {
@@ -131,6 +135,24 @@ function installAcpAgent() {
       socket.serverSend({ jsonrpc: '2.0', method: 'session/update', params: {
         sessionId: 'history-session',
         update: { sessionUpdate: 'user_message_chunk', messageId: 'm1', content: { type: 'text', text: 'hello from history' } },
+      } })
+      return
+    }
+    if (message.method === '_monkeyai/session/model/set') {
+      FakeWebSocket.modelSetRequests.push(message.params)
+      const expected = message.params?._meta?.expectedRevision
+      // The runtime rejects a stale revision and reports the current one.
+      if (expected !== FakeWebSocket.configurationRevision) {
+        socket.serverSend({ jsonrpc: '2.0', id: message.id, error: {
+          code: -32602, message: 'Invalid params',
+          data: { reason: 'configuration_conflict', configurationRevision: FakeWebSocket.configurationRevision },
+        } })
+        return
+      }
+      FakeWebSocket.configurationRevision += 1
+      socket.serverSend({ jsonrpc: '2.0', id: message.id, result: {
+        model: message.params.model,
+        _meta: { configurationRevision: FakeWebSocket.configurationRevision },
       } })
       return
     }
@@ -152,7 +174,7 @@ function installAcpAgent() {
       if (body.params?.cursor === 'cursor-page-1') {
         return jsonResponse({
           result: {
-            session: { id: 'history-session' },
+            session: { id: 'history-session', configurationRevision: FakeWebSocket.configurationRevision },
             messages: [
               { id: 'm0', role: 'user', parts: [{ type: 'text', text: 'older question from http history' }] },
               { id: 'm1', role: 'assistant', parts: [{ type: 'tool_call', toolCallId: 'tool-http-1' }, { type: 'text', text: 'hello from history' }] },
@@ -166,7 +188,7 @@ function installAcpAgent() {
       return jsonResponse({
         result: {
           eventSeq: 10,
-          session: { id: 'history-session' },
+          session: { id: 'history-session', configurationRevision: FakeWebSocket.configurationRevision },
           messages: [
             { id: 'n1', role: 'user', parts: [{ type: 'text', text: 'newer question from http history' }] },
             { id: 'n2', role: 'assistant', parts: [{ type: 'text', text: 'newer answer from http history' }] },
@@ -418,6 +440,54 @@ test('followSession rejects prompts when session:control is missing without clos
     controller.abort()
     await consuming
     assert.equal(socket.closed, true)
+  } finally {
+    globalThis.fetch = originalFetch
+    globalThis.WebSocket = originalWebSocket
+    FakeWebSocket.onClientMessage = null
+  }
+})
+
+test('followSession retries a model switch when another client advanced the configuration revision', async () => {
+  const fetchMock = installAcpAgent()
+  const originalFetch = globalThis.fetch
+  const originalWebSocket = globalThis.WebSocket
+  globalThis.fetch = fetchMock
+  globalThis.WebSocket = FakeWebSocket
+  try {
+    const uplink = new AsyncQueue()
+    const service = createService({ uplinkQueue: uplink })
+    const controller = new AbortController()
+    const frames = []
+    const stream = service.followSession(
+      { accountId: ACCOUNT_ID, machineId: MACHINE_ID, sessionId: 'history-session', cwd: '/work' },
+      controller.signal,
+    )
+    const consuming = collect(stream, frames, controller.signal)
+    await waitFor(() => frames.some(frame => frame.type === 'history_loaded'), 'history_loaded')
+
+    // Another client edits the session after the panel read its revision.
+    FakeWebSocket.configurationRevision += 3
+
+    uplink.push({ type: 'switch_model', model: 'model-b' })
+    await waitFor(() => frames.some(frame => frame.type === 'model_switched'), 'model_switched')
+
+    const switched = frames.find(frame => frame.type === 'model_switched')
+    assert.equal(switched.data.model, 'model-b')
+    assert.ok(!frames.some(frame => frame.type === 'model_switch_failed'))
+    // First attempt used the stale revision, the retry used the reported one.
+    assert.equal(FakeWebSocket.modelSetRequests.length, 2)
+    assert.notEqual(
+      FakeWebSocket.modelSetRequests[0]._meta.expectedRevision,
+      FakeWebSocket.modelSetRequests[1]._meta.expectedRevision,
+    )
+
+    // A second switch reuses the revision learned from the previous result.
+    uplink.push({ type: 'switch_model', model: 'model-c' })
+    await waitFor(() => frames.filter(frame => frame.type === 'model_switched').length === 2, 'second model_switched')
+    assert.equal(FakeWebSocket.modelSetRequests.length, 3)
+
+    controller.abort(new Error('client cancelled'))
+    await consuming
   } finally {
     globalThis.fetch = originalFetch
     globalThis.WebSocket = originalWebSocket
