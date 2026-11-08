@@ -136,6 +136,9 @@ const demoApi = {
       expiresAt: Date.now() + 600_000,
     }
   },
+  async signIn() {
+    return DEMO_ACCOUNT
+  },
   async completeAuthorization() {
     return DEMO_ACCOUNT
   },

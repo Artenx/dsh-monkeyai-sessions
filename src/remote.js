@@ -118,6 +118,16 @@ const methods = {
       expiresAt: z.number(),
     }).strict()),
   },
+  [`${SERVICE_KEY}/signIn`]: {
+    service: SERVICE_KEY,
+    invocation: { kind: 'direct' },
+    parameters: [input('request', z.object({
+      serverAddress: z.string().min(1).max(2048),
+      email: z.string().min(1).max(320),
+      password: z.string().min(1).max(1024),
+    }).strict(), 'SignInRequest')],
+    result: output('Account', Account),
+  },
   [`${SERVICE_KEY}/authorizationStatus`]: {
     service: SERVICE_KEY,
     invocation: { kind: 'direct' },

@@ -27,12 +27,13 @@ The Client bundle inlines a spec-compatible copy of that factory (`src/shared/re
 The panel uses DSH's light theme for a consistent, simple look. The layout is state-driven: an unconnected panel shows a single connect card (server origin plus one primary button, with the paste-callback mode collapsed), a connected panel shows a compact toolbar (account, device, one Refresh action that loads devices and sessions together, disconnect) above the session cards, and an open session focuses the conversation with a compact header (back button, title, model switcher), an approval card with plain option buttons instead of raw JSON, and an Enter-to-send composer. Secondary actions (adding a device by machine ID, creating a new session) stay collapsed in details sections.
 The device list reads the account-wide endpoint directory (`GET /api/v1/endpoints`, no runtime-API header) so every registered device appears, marking `online` from the boolean field and skipping revoked entries. Selecting a device loads its sessions automatically. Headless runtime devices that register through the separate device-code grant may not appear in that directory; for those, add a device manually by machine ID ("Device missing?..." section in the panel) - the entry is kept in browser storage and merged into the device selector.
 
-Two authorization modes are available in the panel:
+Three ways to connect, in order of convenience:
 
-- **Automatic callback (loopback)**: the Host listens on `127.0.0.1` with a random port and the MonkeyAI server redirects to `http://127.0.0.1:<port>/oauth/callback` (officially allowed for the `monkeyai-desktop` client). On desktop the grant completes with no copy-paste; on phones the OS shows a failed connection page whose address bar keeps the full callback URL to paste as a fallback.
+- **Sign in (default)**: enter the MonkeyAI server origin, account email, and password in the panel. The Host performs the whole OAuth exchange server-side — it logs in, opens an authorization request, approves it, and exchanges the returned code — so nothing has to come back from the browser. This is the only mode that works when the browser runs on a phone or any machine other than the DSH Host. The password is used for those requests only and is never stored; the panel clears the field on success.
+- **Browser authorization (loopback)**: the Host listens on `127.0.0.1` with a random port and the MonkeyAI server redirects to `http://127.0.0.1:<port>/oauth/callback`. When the browser shares the Host's machine the callback page posts the code back to the panel and the grant completes with no copy-paste. A remote browser cannot reach that loopback address, so use sign-in instead.
 - **Paste callback (scheme)**: the original `monkeyai-desktop://oauth/callback` redirect for environments where loopback is rejected.
 
-Both modes request `device:connect`, `session:read`, and `session:control` through the registered `monkeyai-desktop` public client. OAuth state and the PKCE verifier stay in the DSH Host process; the Host answers the loopback callback itself and the panel polls `authorizationStatus`.
+All three request `device:connect`, `session:read`, and `session:control` through the registered `monkeyai-desktop` public client. OAuth state and the PKCE verifier stay in the DSH Host process.
 
 ## Sessions
 

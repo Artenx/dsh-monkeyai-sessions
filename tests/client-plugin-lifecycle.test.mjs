@@ -124,6 +124,7 @@ test('Client bundle exposes unary DTOs and the duplex followSession contract', a
     ['authorizationStatus', ['request']],
     ['createSession', ['request']],
     ['completeAuthorization', ['request']],
+    ['signIn', ['request']],
     ['disconnect', ['request']],
     ['listDevices', ['request']],
     ['listSessions', ['request']],
@@ -147,6 +148,7 @@ test('Client bundle exposes unary DTOs and the duplex followSession contract', a
     'monkeyaiSessions/listModels',
     'monkeyaiSessions/listRuntimeSessions',
     'monkeyaiSessions/listSessions',
+    'monkeyaiSessions/signIn',
     'monkeyaiSessions/switchModel',
   ])
 

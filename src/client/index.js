@@ -290,6 +290,8 @@ function RemoteSessionPage({ api }) {
   const [visibleCount, setVisibleCount] = useState(RECENT_LIMIT)
   const [turnActive, setTurnActive] = useState(false)
   const [stopping, setStopping] = useState(false)
+  const [signInEmail, setSignInEmail] = useState('')
+  const [signInPassword, setSignInPassword] = useState('')
   const streamRef = useRef(null)
   const historyLoadedRef = useRef(false)
   const lastDraftRef = useRef('')
@@ -346,6 +348,27 @@ function RemoteSessionPage({ api }) {
       el.scrollTop = el.scrollHeight
     }
   }, [displayEntries.length, historyLoading, sessionId, visibleCount])
+
+  async function signIn() {
+    if (loading || !serverAddress || !signInEmail.trim() || signInPassword === '') return
+    setError('')
+    setLoading(true)
+    setStatus('Signing in to MonkeyAI')
+    try {
+      const account = await unwrap(api.signIn({
+        serverAddress,
+        email: signInEmail.trim(),
+        password: signInPassword,
+      }))
+      setSignInPassword('')
+      adoptAccount(account)
+    } catch (reason) {
+      setError(errorText(reason))
+      setStatus('Sign-in failed')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   async function beginAuthorization(mode) {
     setError('')
@@ -857,21 +880,49 @@ function RemoteSessionPage({ api }) {
             h('button', { type: 'button', style: style.primaryButton, disabled: loading || !callbackUrl, onClick: completeAuthorization }, 'Complete authorization'))))
       : h(React.Fragment, null,
         h('h2', { style: style.sectionTitle }, 'Connect MonkeyAI'),
-        h(Field, { labelText: 'MonkeyAI server origin' },
-          h('input', {
-            type: 'url',
-            value: serverAddress,
-            placeholder: 'https://monkeyai.example.com',
-            style: style.input,
-            onChange: event => setServerAddress(event.target.value),
-          })),
-        h('div', { style: { display: 'grid', gap: 8 } },
-          h('button', { type: 'button', style: style.primaryButton, disabled: loading || !serverAddress, onClick: () => beginAuthorization('loopback') }, 'Connect MonkeyAI'),
-          h('details', { style: style.details },
-            h('summary', { style: style.summary }, 'Automatic callback rejected? Use paste mode'),
-            h('div', { style: { display: 'grid', gap: 8, paddingTop: 8 } },
-              h('button', { type: 'button', style: style.button, disabled: loading || !serverAddress, onClick: () => beginAuthorization('scheme') }, 'Authorize (paste callback)'),
-              h('p', { style: { margin: 0, fontSize: 12, color: t.text3 } }, 'After approving, copy the monkeyai-desktop:// callback URL from the browser address bar and paste it here.')))),
+        h('form', {
+          style: { display: 'grid', gap: 10 },
+          onSubmit: event => { event.preventDefault(); signIn() },
+        },
+          h(Field, { labelText: 'MonkeyAI server origin' },
+            h('input', {
+              type: 'url',
+              value: serverAddress,
+              placeholder: 'https://monkeyai.example.com',
+              style: style.input,
+              autoComplete: 'url',
+              onChange: event => setServerAddress(event.target.value),
+            })),
+          h(Field, { labelText: 'Account email' },
+            h('input', {
+              type: 'email',
+              value: signInEmail,
+              placeholder: 'you@example.com',
+              style: style.input,
+              autoComplete: 'username',
+              onChange: event => setSignInEmail(event.target.value),
+            })),
+          h(Field, { labelText: 'Password' },
+            h('input', {
+              type: 'password',
+              value: signInPassword,
+              placeholder: 'MonkeyAI account password',
+              style: style.input,
+              autoComplete: 'current-password',
+              onChange: event => setSignInPassword(event.target.value),
+            })),
+          h('button', {
+            type: 'submit', style: style.primaryButton,
+            disabled: loading || !serverAddress || !signInEmail.trim() || signInPassword === '',
+          }, loading ? 'Signing in…' : 'Sign in'),
+          h('p', { style: { margin: 0, fontSize: 11.5, color: t.text3 } },
+            'Sign-in runs on the DSH host and works on phones. Your password is used once to authorize this plugin and is never stored.')),
+        h('details', { style: style.details },
+          h('summary', { style: style.summary }, 'Use browser authorization instead'),
+          h('div', { style: { display: 'grid', gap: 8, paddingTop: 8 } },
+            h('button', { type: 'button', style: style.button, disabled: loading || !serverAddress, onClick: () => beginAuthorization('loopback') }, 'Authorize in browser'),
+            h('button', { type: 'button', style: style.button, disabled: loading || !serverAddress, onClick: () => beginAuthorization('scheme') }, 'Authorize (paste callback)'),
+            h('p', { style: { margin: 0, fontSize: 12, color: t.text3 } }, 'Browser authorization needs the callback to reach this host. On a phone, use sign-in above instead.'))),
         accounts.length > 0 ? h('p', { style: { margin: 0, fontSize: 12, color: t.text3 } }, 'Connected accounts appear in the account selector above the device list.') : null))
       : null,
     currentAccount ? h('section', { style: style.card },

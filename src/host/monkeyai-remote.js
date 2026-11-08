@@ -8,6 +8,7 @@ import {
   createRefreshForm,
   createTokenForm,
   MONKEYAI_REDIRECT_URI,
+  MONKEYAI_SCOPES,
   normalizeServerOrigin,
   normalizeTokenResponse,
   parseAuthorizationCallback,
@@ -316,6 +317,77 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
       this.settlePending(requestId, { status: 'failed', error: errorText(error) })
       throw error
     }
+  }
+
+  // Password sign-in runs the whole OAuth dance on the Host: log in to the
+  // MonkeyAI server, open an authorization request, approve it, and exchange
+  // the returned code. Nothing has to come back from the browser, so this
+  // works on phones where the loopback redirect cannot reach this machine.
+  // Credentials are used for these requests only and never stored.
+  async signIn(request) {
+    const serverOrigin = normalizeServerOrigin(requiredString(request?.serverAddress, 'Server address'))
+    const email = requiredString(request?.email, 'Email', 320)
+    const password = requiredString(request?.password, 'Password', 1024)
+    const auth = createAuthorizationRequest(serverOrigin, Date.now(), randomBytes, {
+      callbackMode: 'loopback',
+      loopbackPort: 1,
+    })
+
+    const login = await fetch(`${serverOrigin}/api/auth/v1/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({ email, password }),
+      redirect: 'manual',
+      signal: AbortSignal.timeout(20_000),
+    })
+    if (!login.ok) {
+      const detail = await login.json().catch(() => null)
+      throw new Error(detail?.error?.message || `MonkeyAI sign-in failed (${login.status})`)
+    }
+    const cookie = (login.headers.getSetCookie?.() ?? [])
+      .map(value => value.split(';')[0])
+      .filter(Boolean)
+      .join('; ')
+    if (cookie === '') throw new Error('MonkeyAI did not return a session for this sign-in')
+
+    const withCookie = { cookie, accept: 'application/json' }
+    const authorize = await fetch(auth.authorizationUrl, {
+      headers: withCookie,
+      redirect: 'manual',
+      signal: AbortSignal.timeout(20_000),
+    })
+    const location = authorize.headers.get('location') ?? ''
+    const requestId = new URL(location, serverOrigin).searchParams.get('request_id')
+    if (!requestId) throw new Error('MonkeyAI did not start an authorization request for this sign-in')
+
+    const requestPath = `/api/auth/v1/client-requests/${encodeURIComponent(requestId)}`
+    const consentResponse = await fetch(`${serverOrigin}${requestPath}`, {
+      headers: withCookie,
+      signal: AbortSignal.timeout(20_000),
+    })
+    const consent = await consentResponse.json().catch(() => null)
+    if (!consentResponse.ok || !consent?.csrf_token) {
+      throw new Error(consent?.error?.message || 'MonkeyAI did not return an approvable authorization request')
+    }
+    const scopes = Array.isArray(consent.scopes) && consent.scopes.length > 0
+      ? consent.scopes.filter(scope => typeof scope === 'string')
+      : [...MONKEYAI_SCOPES]
+
+    const approvedResponse = await fetch(`${serverOrigin}${requestPath}/complete`, {
+      method: 'POST',
+      headers: { ...withCookie, 'content-type': 'application/json', 'x-csrf-token': consent.csrf_token },
+      body: JSON.stringify({ approved_scopes: scopes }),
+      signal: AbortSignal.timeout(20_000),
+    })
+    const approved = await approvedResponse.json().catch(() => null)
+    if (!approvedResponse.ok || typeof approved?.launch_url !== 'string') {
+      throw new Error(approved?.error?.message || 'MonkeyAI did not approve the authorization request')
+    }
+    // The launch URL carries the code; rebuild it against the redirect this
+    // request registered so the existing callback validation still applies.
+    const launch = new URL(approved.launch_url, serverOrigin)
+    const callbackUrl = `${auth.redirectUri}?${launch.searchParams.toString()}`
+    return this.exchangeAuthorization(auth, callbackUrl)
   }
 
   async exchangeAuthorization(auth, callbackUrl) {
