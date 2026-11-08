@@ -93,7 +93,7 @@ const index = {
     name: manifest.name,
     title: { en: 'MonkeyAI Sessions', zh: 'MonkeyAI 会话' },
     description: {
-      en: manifest.description,
+      en: 'Read and continue your MonkeyAI conversations inside DeepSeek Harness: browse session history and send new instructions to pick up where you left off in the MonkeyAI client',
       zh: '在 DSH 里直接读取和查看 MonkeyAI 中的会话，并下发新指令，无缝接续之前在 MonkeyAI 客户端上的工作。支持完整历史、实时回复、停止回合与切换模型。',
     },
     icon,

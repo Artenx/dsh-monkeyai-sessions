@@ -190,7 +190,7 @@ function findOpenSessionButton(node) {
     return undefined
   }
   if (!node || typeof node !== 'object') return undefined
-  if (node.type === 'button' && node.props?.title?.startsWith('Open ')) return node
+  if (node.type === 'button' && node.props?.title?.startsWith('打开 ')) return node
   return findOpenSessionButton(node.children)
 }
 

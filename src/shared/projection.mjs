@@ -1,7 +1,7 @@
 const MESSAGE_UPDATES = Object.freeze({
-  user_message_chunk: { role: 'user', label: 'You', mode: 'append' },
+  user_message_chunk: { role: 'user', label: '我', mode: 'append' },
   agent_message_chunk: { role: 'assistant', label: 'MonkeyAI', mode: 'append' },
-  user_message: { role: 'user', label: 'You', mode: 'replace' },
+  user_message: { role: 'user', label: '我', mode: 'replace' },
   agent_message: { role: 'assistant', label: 'MonkeyAI', mode: 'replace' },
 })
 
@@ -11,7 +11,7 @@ const THOUGHT_UPDATES = Object.freeze({
 })
 
 export const TOOL_STATUS_LABEL = Object.freeze({
-  pending: 'queued', in_progress: 'running', completed: 'done', failed: 'failed', cancelled: 'cancelled',
+  pending: '排队中', in_progress: '执行中', completed: '完成', failed: '失败', cancelled: '已取消',
 })
 
 function contentText(content) {
@@ -124,20 +124,20 @@ function projectFrames(frames) {
       entries.push({ kind: 'raw', label: kind || 'session/update', data: update, key: `raw:${entries.length}` })
       continue
     }
-    if (frame.type === 'ready') { if (!seenReady) { seenReady = true; entries.push({ kind: 'system', label: 'Connected to remote runtime', key: `sys-ready:${entries.length}` }) } continue }
-    if (frame.type === 'history_loaded') { if (!seenHistoryLoaded) { seenHistoryLoaded = true; entries.push({ kind: 'system', label: 'History loaded', key: `sys-hist:${entries.length}` }) } continue }
-    if (frame.type === 'history_incomplete') { entries.push({ kind: 'system', label: 'History incomplete - some earlier messages may be missing', key: `sys-inc:${entries.length}` }); continue }
-    if (frame.type === 'reconnecting') { if (!seenReconnecting) { seenReconnecting = true; entries.push({ kind: 'system', label: frame.message || 'Reconnecting to remote runtime', key: `sys-reconn:${entries.length}` }) } continue }
+    if (frame.type === 'ready') { if (!seenReady) { seenReady = true; entries.push({ kind: 'system', label: '已连接到远程 runtime', key: `sys-ready:${entries.length}` }) } continue }
+    if (frame.type === 'history_loaded') { if (!seenHistoryLoaded) { seenHistoryLoaded = true; entries.push({ kind: 'system', label: '历史已加载', key: `sys-hist:${entries.length}` }) } continue }
+    if (frame.type === 'history_incomplete') { entries.push({ kind: 'system', label: '历史不完整，部分更早的消息可能缺失', key: `sys-inc:${entries.length}` }); continue }
+    if (frame.type === 'reconnecting') { if (!seenReconnecting) { seenReconnecting = true; entries.push({ kind: 'system', label: frame.message || '正在重连远程 runtime', key: `sys-reconn:${entries.length}` }) } continue }
     if (frame.type === 'reconnected') { continue }
     if (frame.type === 'delivery') {
       const accepted = Boolean(frame.data?.accepted)
       if (accepted) continue // turn completion is shown in the composer status line
-      entries.push({ kind: 'system', label: 'MonkeyAI did not accept the instruction', key: `sys-del:${entries.length}` })
+      entries.push({ kind: 'system', label: 'MonkeyAI 未接受该指令', key: `sys-del:${entries.length}` })
       continue
     }
-    if (frame.type === 'cancel_sent') { entries.push({ kind: 'system', label: 'Stop requested', key: `sys-cancel:${entries.length}` }); continue }
+    if (frame.type === 'cancel_sent') { entries.push({ kind: 'system', label: '已请求停止', key: `sys-cancel:${entries.length}` }); continue }
     if (frame.type === 'request') { continue } // rendered as an approval card from pendingRequests
-    if (frame.type === 'model_switched') { entries.push({ kind: 'system', label: `Model switched to ${frame.data?.model ?? 'selected model'}`, key: `sys-model:${entries.length}` }); continue }
+    if (frame.type === 'model_switched') { entries.push({ kind: 'system', label: `已切换模型：${frame.data?.model ?? '所选模型'}`, key: `sys-model:${entries.length}` }); continue }
     if (frame.type === 'model_switch_failed') { continue } // surfaced via the error banner
     if (frame.type === 'notification' && typeof frame.method === 'string' && frame.method.startsWith('_monkeyai/')) { continue } // internal runtime state notifications
     if (frame.type === 'error') { entries.push({ kind: 'raw', label: frame.code || 'error', data: { message: frame.message || frame.code }, key: `sys-err:${entries.length}` }); continue }

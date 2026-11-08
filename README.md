@@ -1,5 +1,7 @@
 # DSH MonkeyAI Sessions
 
+English | [简体中文](README.zh.md)
+
 Read and continue your MonkeyAI conversations inside DeepSeek Harness.
 
 Browse the sessions on your MonkeyAI devices, open one to read its full conversation history, and send new instructions to carry on the work you started in the MonkeyAI client — no copy-pasting context, no restarting the task. Replies stream back live, and you can stop a running turn or switch models without leaving DSH.
@@ -59,7 +61,7 @@ From a checkout:
 npm install
 npm run build
 npm pack
-dsh plugin --profile web add ./dsh-monkeyai-sessions-0.1.0.tgz
+dsh plugin --profile web add ./dsh-monkeyai-sessions-0.1.1.tgz
 ```
 
 Verified against a real DSH `0.2.2-rc.1` web profile and a live MonkeyAI runtime: authorization, full history loading, prompt delivery, model switching, and turn cancellation all work end to end.

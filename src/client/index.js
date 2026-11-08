@@ -91,7 +91,7 @@ const PANEL_CSS = `
 `
 
 function errorText(error) {
-  return typeof error?.message === 'string' ? error.message : typeof error === 'string' ? error : 'Remote operation failed'
+  return typeof error?.message === 'string' ? error.message : typeof error === 'string' ? error : '远程操作失败'
 }
 
 // Lightweight inline markdown: fenced code blocks, `code`, **bold**,
@@ -221,8 +221,8 @@ function ApprovalCard({ request, hasControl, onRespond, answerText, setAnswerTex
   const disabled = !hasControl
   return h('div', { style: style.approval, role: 'alert' },
     h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
-      h('span', { style: { fontSize: 12.5, fontWeight: 650 } }, isPermission ? 'Permission requested' : 'MonkeyAI asks for input'),
-      h('span', { style: { fontSize: 11, color: t.text3 } }, 'responding requires session:control')),
+      h('span', { style: { fontSize: 12.5, fontWeight: 650 } }, isPermission ? '请求授权' : 'MonkeyAI 需要你的输入'),
+      h('span', { style: { fontSize: 11, color: t.text3 } }, '回复需要 session:control 权限')),
     questionText !== '' ? h('div', { style: { fontSize: 12.5, color: t.text2, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' } }, questionText) : null,
     options.length > 0
       ? h('div', { style: style.row },
@@ -230,26 +230,26 @@ function ApprovalCard({ request, hasControl, onRespond, answerText, setAnswerTex
           type: 'button', style: option.kind === 'allow_once' || option.kind === 'allow_always' ? style.primaryButton : style.button,
           key: option.optionId, disabled, onClick: () => onRespond(request, { outcome: 'selected', optionId: option.optionId }),
         }, option.name || option.optionId)),
-        h('button', { type: 'button', style: style.button, disabled, onClick: () => onRespond(request, { outcome: 'cancelled' }) }, 'Decline'))
+        h('button', { type: 'button', style: style.button, disabled, onClick: () => onRespond(request, { outcome: 'cancelled' }) }, '拒绝'))
       : null,
     options.length === 0 && !isPermission
       ? h(React.Fragment, null,
         h('textarea', {
           style: { ...style.textarea, minHeight: 44 },
-          placeholder: disabled ? 'Read-only: session:control is required to answer' : 'Type your answer',
+          placeholder: disabled ? '只读模式：回复需要 session:control 权限' : '输入你的回答',
           value: answerText, disabled,
           onChange: event => setAnswerText(event.target.value),
         }),
         h('div', { style: style.row },
-          h('button', { type: 'button', style: style.primaryButton, disabled: disabled || answerText.trim() === '', onClick: () => onAnswer(request) }, 'Reply'),
-          h('button', { type: 'button', style: style.button, disabled, onClick: () => onRespond(request, { action: 'decline' }) }, 'Decline')))
+          h('button', { type: 'button', style: style.primaryButton, disabled: disabled || answerText.trim() === '', onClick: () => onAnswer(request) }, '回复'),
+          h('button', { type: 'button', style: style.button, disabled, onClick: () => onRespond(request, { action: 'decline' }) }, '拒绝')))
       : null,
     options.length === 0 && isPermission
       ? h('div', { style: style.row },
-        h('button', { type: 'button', style: style.button, disabled, onClick: () => onRespond(request, { outcome: 'cancelled' }) }, 'Decline'))
+        h('button', { type: 'button', style: style.button, disabled, onClick: () => onRespond(request, { outcome: 'cancelled' }) }, '拒绝'))
       : null,
     h('details', { style: style.details },
-      h('summary', { style: style.summary }, 'Request details'),
+      h('summary', { style: style.summary }, '请求详情'),
       h('pre', { style: { margin: '6px 0 0', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontSize: 11.5 } }, JSON.stringify(request.data, null, 2))),
   )
 }
@@ -271,7 +271,7 @@ function RemoteSessionPage({ api }) {
   const [pendingRequests, setPendingRequests] = useState([])
   const [prompt, setPrompt] = useState('')
   const [answerText, setAnswerText] = useState('')
-  const [status, setStatus] = useState('Disconnected')
+  const [status, setStatus] = useState('未连接')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [lastDelivery, setLastDelivery] = useState(undefined)
@@ -353,7 +353,7 @@ function RemoteSessionPage({ api }) {
     if (loading || !serverAddress || !signInEmail.trim() || signInPassword === '') return
     setError('')
     setLoading(true)
-    setStatus('Signing in to MonkeyAI')
+    setStatus('正在登录 MonkeyAI')
     try {
       const account = await unwrap(api.signIn({
         serverAddress,
@@ -364,7 +364,7 @@ function RemoteSessionPage({ api }) {
       adoptAccount(account)
     } catch (reason) {
       setError(errorText(reason))
-      setStatus('Sign-in failed')
+      setStatus('登录失败')
     } finally {
       setLoading(false)
     }
@@ -380,9 +380,9 @@ function RemoteSessionPage({ api }) {
       setAuthorizationMode(mode)
       setCopied(false)
       if (mode === 'loopback') {
-        setStatus('Waiting for approval')
+        setStatus('等待批准')
       } else {
-        setStatus('Approve access, then paste the callback URL')
+        setStatus('批准授权后，粘贴回调 URL')
       }
       // Keep the opener so the loopback page can post the callback back.
       // Without it the browser cannot return the code automatically.
@@ -433,12 +433,12 @@ function RemoteSessionPage({ api }) {
           setAccounts(current => [result.account, ...current.filter(item => item.accountId !== result.account.accountId)])
           setAccountId(result.account.accountId)
           setServerAddress(result.account.serverOrigin)
-          setStatus('MonkeyAI account connected')
+          setStatus('MonkeyAI 账号已连接')
         } else if (result.status === 'failed') {
-          setError(result.error || 'Automatic authorization failed; paste the callback URL instead.')
-          setStatus('Automatic authorization failed')
+          setError(result.error || '自动授权失败，请改为粘贴回调 URL。')
+          setStatus('自动授权失败')
         } else {
-          setStatus('Authorization request expired')
+          setStatus('授权请求已过期')
         }
         setAuthorizationRequestId('')
         setAuthorizationUrl('')
@@ -452,7 +452,7 @@ function RemoteSessionPage({ api }) {
     setAccounts(current => [account, ...current.filter(item => item.accountId !== account.accountId)])
     setAccountId(account.accountId)
     setServerAddress(account.serverOrigin)
-    setStatus('MonkeyAI account connected')
+    setStatus('MonkeyAI 账号已连接')
     setAddingServer(false)
   }
 
@@ -477,9 +477,9 @@ function RemoteSessionPage({ api }) {
     try {
       await navigator.clipboard.writeText(authorizationUrl)
       setCopied(true)
-      setStatus('Authorization link copied')
+      setStatus('授权链接已复制')
     } catch {
-      setStatus('Copy failed - select the link text manually')
+      setStatus('复制失败，请手动选中链接文本')
     }
   }
 
@@ -497,7 +497,7 @@ function RemoteSessionPage({ api }) {
       setSessionId('')
       streamRef.current?.dispose()
       streamRef.current = null
-      setStatus(result.items.length > 0 ? `${result.items.length} device(s) found` : 'No devices registered')
+      setStatus(result.items.length > 0 ? `${result.items.length} device(s) found` : '暂无已注册设备')
       if (first) await loadSessions(first)
     } catch (reason) {
       setError(errorText(reason))
@@ -522,10 +522,10 @@ function RemoteSessionPage({ api }) {
     ])
     const errors = []
     if (results[0].status === 'fulfilled') setSummarySessions(results[0].value.items)
-    else errors.push(`Summary index: ${errorText(results[0].reason)}`)
+    else errors.push(`会话摘要索引：${errorText(results[0].reason)}`)
     if (results[1].status === 'fulfilled') setRuntimeSessions(results[1].value.sessions)
-    else errors.push(`ACP session list: ${errorText(results[1].reason)}`)
-    setStatus(errors.length === 0 ? 'Sessions refreshed' : 'Some session sources are unavailable')
+    else errors.push(`ACP 会话列表：${errorText(results[1].reason)}`)
+    setStatus(errors.length === 0 ? '会话已刷新' : '部分会话来源不可用')
     setError(errors.join('\n'))
     setLoading(false)
   }
@@ -545,38 +545,38 @@ function RemoteSessionPage({ api }) {
     setCurrentModel('')
     setVisibleCount(RECENT_LIMIT)
     setHistoryLoading(true)
-    setStatus('Connecting to remote session')
+    setStatus('正在连接远程会话')
     try {
       const stream = api.followSession({ accountId, machineId, sessionId: session.id, cwd: session.cwd })
       streamRef.current = stream
-      setStatus('Remote session connected')
+      setStatus('远程会话已连接')
       for await (const frame of stream) {
         setFrames(current => [...current, frame])
-        if (frame.type === 'ready' && !historyLoadedRef.current) setStatus('Replaying session history')
-        if (frame.type === 'reconnecting') setStatus(frame.message || 'Reconnecting to remote runtime')
+        if (frame.type === 'ready' && !historyLoadedRef.current) setStatus('正在回放会话历史')
+        if (frame.type === 'reconnecting') setStatus(frame.message || '正在重连远程 runtime')
         if (frame.type === 'history_loaded') {
           historyLoadedRef.current = true
-          setStatus('History loaded')
+          setStatus('历史已加载')
           setHistoryLoading(false)
           if (frame.model) setCurrentModel(frame.model)
         }
         if (frame.type === 'history_incomplete') {
-          setStatus('History incomplete: ' + (frame.message || 'replay was cut off'))
+          setStatus('历史不完整：' + (frame.message || '回放被中断'))
           setHistoryLoading(false)
         }
         if (frame.type === 'model_switched') {
           if (frame.data?.model) setCurrentModel(frame.data.model)
           setSwitchingModel(false)
-          setStatus('Model switched')
+          setStatus('模型已切换')
         }
         if (frame.type === 'model_switch_failed') {
           setSwitchingModel(false)
-          setError(frame.message || 'Model switch was rejected')
-          setStatus('Model switch failed')
+          setError(frame.message || '模型切换被拒绝')
+          setStatus('模型切换失败')
         }
         if (frame.type === 'session_missing') {
-          setError(frame.message || 'This session no longer exists on the selected device.')
-          setStatus('Session not found on device')
+          setError(frame.message || '该会话在所选设备上已不存在。')
+          setStatus('设备上找不到该会话')
           setHistoryLoading(false)
         }
         if (frame.type === 'request') {
@@ -589,31 +589,31 @@ function RemoteSessionPage({ api }) {
           setStopping(false)
           if (accepted) {
             const cancelled = frame.data?.result?.stopReason === 'cancelled'
-            setStatus(cancelled ? 'Turn stopped' : 'Turn completed')
+            setStatus(cancelled ? '回合已停止' : '回合已完成')
           } else {
             setPrompt(current => current === '' ? (lastDraftRef.current || '') : current)
-            setStatus('MonkeyAI did not accept the instruction; draft preserved')
+            setStatus('MonkeyAI 未接受该指令，草稿已保留')
             if (frame.message) setError(frame.message)
           }
         }
         if (frame.type === 'cancel_sent') {
           setStopping(false)
-          setStatus('Stop requested - waiting for the runtime to cancel')
+          setStatus('已请求停止，等待 runtime 取消')
         }
         if (frame.type === 'response_sent') {
           setPendingRequests(current => current.filter(item => item.requestId !== frame.requestId))
         }
         if (frame.type === 'response_error') {
-          setError(`Remote response was rejected: ${frame.code || 'unknown'}`)
+          setError(`远程回复被拒绝：${frame.code || '未知'}`)
         }
-        if (frame.type === 'error') setError(frame.message || frame.code || 'Remote session error')
+        if (frame.type === 'error') setError(frame.message || frame.code || '远程会话错误')
       }
-      setStatus('Remote session disconnected')
+      setStatus('远程会话已断开')
       setHistoryLoading(false)
       setTurnActive(false)
       setStopping(false)
     } catch (reason) {
-      setStatus('Remote session unavailable')
+      setStatus('远程会话不可用')
       setError(errorText(reason))
       setHistoryLoading(false)
       setTurnActive(false)
@@ -632,7 +632,7 @@ function RemoteSessionPage({ api }) {
       setPrompt('')
       setTurnActive(true)
       setStopping(false)
-      setStatus('Instruction sent - MonkeyAI is working')
+      setStatus('指令已发送，MonkeyAI 正在处理')
     } catch (reason) {
       setError(errorText(reason))
     }
@@ -644,7 +644,7 @@ function RemoteSessionPage({ api }) {
     try {
       stream.send({ type: 'cancel' })
       setStopping(true)
-      setStatus('Stopping…')
+      setStatus('停止中…')
     } catch (reason) {
       setError(errorText(reason))
     }
@@ -652,7 +652,7 @@ function RemoteSessionPage({ api }) {
 
   function respond(request, result) {
     if (!hasControl) {
-      setError('MonkeyAI response requires session:control permission')
+      setError('回复 MonkeyAI 需要 session:control 权限')
       return
     }
     try {
@@ -684,7 +684,7 @@ function RemoteSessionPage({ api }) {
       setCallbackUrl('')
       setAuthorizationUrl('')
       setAuthorizationMode('')
-      setStatus('Disconnected')
+      setStatus('未连接')
       setAddingServer(false)
     } catch (reason) {
       setError(errorText(reason))
@@ -739,7 +739,7 @@ function RemoteSessionPage({ api }) {
       setDevices(current => [entry, ...current.filter(item => item.machineId !== machineId)])
       setMachineId(current => current || machineId)
     }
-    setStatus(`Added device ${entry.displayName}`)
+    setStatus(`已添加设备 ${entry.displayName}`)
   }
 
   function removeManualDevice(machineId) {
@@ -757,14 +757,14 @@ function RemoteSessionPage({ api }) {
       if (created.model) setCurrentModel(created.model)
       setRuntimeSessions(current => {
         if (current.some(item => item.id === created.sessionId)) return current
-        return [{ id: created.sessionId, title: created.title || 'New remote session', cwd: created.cwd }, ...current]
+        return [{ id: created.sessionId, title: created.title || '新建远程会话', cwd: created.cwd }, ...current]
       })
       setSummarySessions(current => current.filter(item => item.id !== created.sessionId))
-      setStatus('Session created')
-      await openSession({ id: created.sessionId, title: created.title || 'New remote session', cwd: created.cwd })
+      setStatus('会话已创建')
+      await openSession({ id: created.sessionId, title: created.title || '新建远程会话', cwd: created.cwd })
     } catch (reason) {
       setError(errorText(reason))
-      setStatus('Could not create a remote session')
+      setStatus('无法创建远程会话')
     } finally {
       setNewSessionBusy(false)
     }
@@ -780,10 +780,10 @@ function RemoteSessionPage({ api }) {
       // Switch on the live session connection: a separate connection cannot
       // see the mounted session and the runtime rejects the switch.
       stream.send({ type: 'switch_model', model: modelId })
-      setStatus('Switching model…')
+      setStatus('正在切换模型…')
     } catch (reason) {
       setError(errorText(reason))
-      setStatus('Model switch failed')
+      setStatus('模型切换失败')
       setSwitchingModel(false)
     }
   }
@@ -841,32 +841,32 @@ function RemoteSessionPage({ api }) {
     h('header', { style: style.header },
       h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
         h(MonkeyIcon, { size: 22 }),
-        h('h1', { style: style.title }, 'MonkeyAI Sessions')),
+        h('h1', { style: style.title }, 'MonkeyAI 会话')),
       h(StatusBadge, { status, live: isLive })),
     error ? h('div', { role: 'alert', style: style.error },
       h('span', { style: { flex: 1 } }, error),
       h('button', {
-        type: 'button', 'aria-label': 'Dismiss error', onClick: () => setError(''),
+        type: 'button', 'aria-label': '关闭错误提示', onClick: () => setError(''),
         style: { border: 0, background: 'transparent', cursor: 'pointer', color: t.danger, fontWeight: 700, padding: '0 2px', fontSize: 13 },
       }, '×')) : null,
     showConnectCard ? h('section', { style: style.card },
       addingServer && !authorizing ? h('div', { style: style.row },
-        h('h2', { style: { ...style.sectionTitle, flex: 1 } }, 'Add MonkeyAI server'),
-        h('button', { type: 'button', style: style.button, onClick: () => { setAddingServer(false); setServerAddress(currentAccount?.serverOrigin || ''); setStatus('MonkeyAI account connected') } }, 'Cancel')) : null,
+        h('h2', { style: { ...style.sectionTitle, flex: 1 } }, '添加 MonkeyAI 服务器'),
+        h('button', { type: 'button', style: style.button, onClick: () => { setAddingServer(false); setServerAddress(currentAccount?.serverOrigin || ''); setStatus('MonkeyAI 账号已连接') } }, '取消')) : null,
       authorizing ? h(React.Fragment, null,
         h('div', { style: style.row },
-          h('h2', { style: { ...style.sectionTitle, flex: 1 } }, addingServer ? 'Authorizing a new server' : 'Waiting for authorization'),
-          addingServer ? h('button', { type: 'button', style: style.button, onClick: () => { setAuthorizationRequestId(''); setAuthorizationUrl(''); setAuthorizationMode(''); setCallbackUrl(''); setAddingServer(false); setStatus('MonkeyAI account connected') } }, 'Cancel') : null),
+          h('h2', { style: { ...style.sectionTitle, flex: 1 } }, addingServer ? '正在授权新服务器' : '等待授权'),
+          addingServer ? h('button', { type: 'button', style: style.button, onClick: () => { setAuthorizationRequestId(''); setAuthorizationUrl(''); setAuthorizationMode(''); setCallbackUrl(''); setAddingServer(false); setStatus('MonkeyAI 账号已连接') } }, '取消') : null),
         h('ol', { style: { margin: 0, paddingLeft: 18, display: 'grid', gap: 6, fontSize: 12.5, color: t.text2 } },
-          h('li', null, 'Open the authorization page and approve access in MonkeyAI.',
+          h('li', null, '打开授权页并在 MonkeyAI 中批准访问。',
             h('span', { style: style.row, title: authorizationUrl },
-              h('a', { href: authorizationUrl, target: '_blank', rel: 'noopener noreferrer', style: { color: t.accent, fontWeight: 600, fontSize: 12 } }, 'Open page'),
-              h('button', { type: 'button', style: style.button, onClick: copyAuthorizationUrl }, copied ? 'Copied' : 'Copy link'))),
+              h('a', { href: authorizationUrl, target: '_blank', rel: 'noopener noreferrer', style: { color: t.accent, fontWeight: 600, fontSize: 12 } }, '打开授权页'),
+              h('button', { type: 'button', style: style.button, onClick: copyAuthorizationUrl }, copied ? '已复制' : '复制链接'))),
           authorizationMode === 'loopback'
-            ? h('li', null, 'Approve in the browser - this panel completes automatically. If the browser cannot return to DSH, copy the callback URL below.')
-            : h('li', null, 'After approving, the browser shows the monkeyai-desktop:// callback - copy its full address-bar URL and paste it below.')),
+            ? h('li', null, '在浏览器中批准后面板会自动完成。若浏览器无法回传到 DSH，请复制回调 URL 粘贴到下方。')
+            : h('li', null, '批准后浏览器会显示 monkeyai-desktop:// 回调，复制地址栏完整 URL 粘贴到下方。')),
         h('details', { style: style.details },
-          h('summary', { style: style.summary }, 'Automatic completion did not finish? Paste the callback'),
+          h('summary', { style: style.summary }, '没有自动完成？手动粘贴回调'),
           h('div', { style: { ...style.row, paddingTop: 8 } },
             h('input', {
               type: 'url',
@@ -877,14 +877,14 @@ function RemoteSessionPage({ api }) {
               style: { ...style.input, flex: '1 1 260px' },
               onChange: event => setCallbackUrl(event.target.value),
             }),
-            h('button', { type: 'button', style: style.primaryButton, disabled: loading || !callbackUrl, onClick: completeAuthorization }, 'Complete authorization'))))
+            h('button', { type: 'button', style: style.primaryButton, disabled: loading || !callbackUrl, onClick: completeAuthorization }, '完成授权'))))
       : h(React.Fragment, null,
-        h('h2', { style: style.sectionTitle }, 'Connect MonkeyAI'),
+        h('h2', { style: style.sectionTitle }, '连接 MonkeyAI'),
         h('form', {
           style: { display: 'grid', gap: 10 },
           onSubmit: event => { event.preventDefault(); signIn() },
         },
-          h(Field, { labelText: 'MonkeyAI server origin' },
+          h(Field, { labelText: 'MonkeyAI 服务器地址' },
             h('input', {
               type: 'url',
               value: serverAddress,
@@ -893,7 +893,7 @@ function RemoteSessionPage({ api }) {
               autoComplete: 'url',
               onChange: event => setServerAddress(event.target.value),
             })),
-          h(Field, { labelText: 'Account email' },
+          h(Field, { labelText: '账号邮箱' },
             h('input', {
               type: 'email',
               value: signInEmail,
@@ -902,11 +902,11 @@ function RemoteSessionPage({ api }) {
               autoComplete: 'username',
               onChange: event => setSignInEmail(event.target.value),
             })),
-          h(Field, { labelText: 'Password' },
+          h(Field, { labelText: '密码' },
             h('input', {
               type: 'password',
               value: signInPassword,
-              placeholder: 'MonkeyAI account password',
+              placeholder: 'MonkeyAI 账号密码',
               style: style.input,
               autoComplete: 'current-password',
               onChange: event => setSignInPassword(event.target.value),
@@ -914,70 +914,70 @@ function RemoteSessionPage({ api }) {
           h('button', {
             type: 'submit', style: style.primaryButton,
             disabled: loading || !serverAddress || !signInEmail.trim() || signInPassword === '',
-          }, loading ? 'Signing in…' : 'Sign in'),
+          }, loading ? '登录中…' : '登录'),
           h('p', { style: { margin: 0, fontSize: 11.5, color: t.text3 } },
-            'Sign-in runs on the DSH host and works on phones. Your password is used once to authorize this plugin and is never stored.')),
+            '登录在 DSH Host 上完成，手机同样可用。密码仅用于本次授权，不会被存储。')),
         h('details', { style: style.details },
-          h('summary', { style: style.summary }, 'Use browser authorization instead'),
+          h('summary', { style: style.summary }, '改用浏览器授权'),
           h('div', { style: { display: 'grid', gap: 8, paddingTop: 8 } },
-            h('button', { type: 'button', style: style.button, disabled: loading || !serverAddress, onClick: () => beginAuthorization('loopback') }, 'Authorize in browser'),
-            h('button', { type: 'button', style: style.button, disabled: loading || !serverAddress, onClick: () => beginAuthorization('scheme') }, 'Authorize (paste callback)'),
-            h('p', { style: { margin: 0, fontSize: 12, color: t.text3 } }, 'Browser authorization needs the callback to reach this host. On a phone, use sign-in above instead.'))),
-        accounts.length > 0 ? h('p', { style: { margin: 0, fontSize: 12, color: t.text3 } }, 'Connected accounts appear in the account selector above the device list.') : null))
+            h('button', { type: 'button', style: style.button, disabled: loading || !serverAddress, onClick: () => beginAuthorization('loopback') }, '在浏览器中授权'),
+            h('button', { type: 'button', style: style.button, disabled: loading || !serverAddress, onClick: () => beginAuthorization('scheme') }, '授权（粘贴回调）'),
+            h('p', { style: { margin: 0, fontSize: 12, color: t.text3 } }, '浏览器授权需要回调能访问到本机 Host。手机上请改用上方账号登录。'))),
+        accounts.length > 0 ? h('p', { style: { margin: 0, fontSize: 12, color: t.text3 } }, '已连接的账号会出现在设备列表上方的账号选择器中。') : null))
       : null,
     currentAccount ? h('section', { style: style.card },
       h('div', { style: style.row },
-        h('h2', { style: { ...style.sectionTitle, flex: 1 } }, 'Remote sessions'),
+        h('h2', { style: { ...style.sectionTitle, flex: 1 } }, '远程会话'),
         h('span', { style: { fontSize: 11, color: t.text3 } }, currentAccount.scopes.filter(s => s !== 'device:connect').join(' · '))),
       h('div', { style: style.row },
-        h('select', { style: { ...style.input, flex: '1 1 200px' }, value: accountId, onChange: event => setAccountId(event.target.value), 'aria-label': 'Authorized account' },
+        h('select', { style: { ...style.input, flex: '1 1 200px' }, value: accountId, onChange: event => setAccountId(event.target.value), 'aria-label': '已授权账号' },
           accounts.map(account => h('option', { key: account.accountId, value: account.accountId }, account.serverOrigin))),
-        h('button', { type: 'button', style: { ...style.button, flex: '0 0 auto', padding: '6px 10px', fontWeight: 700 }, disabled: loading || addingServer, onClick: () => { setAddingServer(true); setServerAddress(''); setAuthorizationRequestId(''); setAuthorizationUrl(''); setAuthorizationMode(''); setCallbackUrl(''); setStatus('Enter a MonkeyAI server origin') }, title: 'Authorize an additional MonkeyAI server' }, '+ Add server'),
+        h('button', { type: 'button', style: { ...style.button, flex: '0 0 auto', padding: '6px 10px', fontWeight: 700 }, disabled: loading || addingServer, onClick: () => { setAddingServer(true); setServerAddress(''); setAuthorizationRequestId(''); setAuthorizationUrl(''); setAuthorizationMode(''); setCallbackUrl(''); setStatus('请输入 MonkeyAI 服务器地址') }, title: '授权另一个 MonkeyAI 服务器' }, '+ 添加服务器'),
         h('select', { style: { ...style.input, flex: '1 1 220px' }, value: machineId, onChange: event => {
           const next = event.target.value
           setMachineId(next)
           if (next) void loadSessions(next)
-        }, 'aria-label': 'Remote device' },
-          h('option', { value: '' }, 'Select a device'),
-          allDevices.map(device => h('option', { key: device.machineId, value: device.machineId }, `${device.displayName}${device.status === 'online' ? '' : ` · ${device.status}`}${device.stale ? ' · stale' : ''}`))),
-        h('button', { type: 'button', style: style.button, disabled: loading, onClick: machineId ? () => loadSessions() : loadDevices, title: machineId ? 'Refresh sessions' : 'Refresh devices' }, 'Refresh'),
-        h('button', { type: 'button', style: style.dangerButton, disabled: !accountId, onClick: disconnectAccount, title: 'Revoke this account authorization' }, 'Disconnect')),
-      !hasRead ? h('p', { style: { margin: 0, fontSize: 12, color: t.text3 } }, 'session:read is required to list and read remote sessions.') : null,
+        }, 'aria-label': '远程设备' },
+          h('option', { value: '' }, '选择设备'),
+          allDevices.map(device => h('option', { key: device.machineId, value: device.machineId }, `${device.displayName}${device.status === 'online' ? '' : ` · ${device.status === 'offline' ? '离线' : device.status}`}${device.stale ? ' · 已过期' : ''}`))),
+        h('button', { type: 'button', style: style.button, disabled: loading, onClick: machineId ? () => loadSessions() : loadDevices, title: machineId ? '刷新会话' : '刷新设备' }, '刷新'),
+        h('button', { type: 'button', style: style.dangerButton, disabled: !accountId, onClick: disconnectAccount, title: '撤销该账号授权' }, '断开连接')),
+      !hasRead ? h('p', { style: { margin: 0, fontSize: 12, color: t.text3 } }, '列出和读取远程会话需要 session:read 权限。') : null,
       manualDevices.length > 0
         ? h('div', { style: style.row },
           manualDevices.map(device => h('span', { key: device.machineId, style: style.chip },
             device.displayName,
             h('button', {
               type: 'button', style: { border: 0, background: 'transparent', cursor: 'pointer', padding: 0, color: t.danger, fontWeight: 700, fontSize: 12 },
-              'aria-label': `Remove ${device.displayName}`,
+              'aria-label': `移除 ${device.displayName}`,
               onClick: () => removeManualDevice(device.machineId),
             }, '×'))))
         : null,
       h('details', { style: style.details },
-        h('summary', { style: style.summary }, 'Device missing? Add it by machine ID'),
+        h('summary', { style: style.summary }, '找不到设备？按 machine ID 添加'),
         h('div', { style: { display: 'grid', gap: 8, paddingTop: 8 } },
           h('div', { style: style.row },
             h('input', {
               style: { ...style.input, flex: '2 1 200px' },
               value: manualDeviceId,
-              placeholder: 'Machine ID, e.g. 6f1c2a34-... or headless-host-01',
+              placeholder: 'Machine ID，例如 6f1c2a34-... 或 headless-host-01',
               onChange: event => setManualDeviceId(event.target.value),
             }),
             h('input', {
               style: { ...style.input, flex: '1 1 140px' },
               value: manualDeviceName,
-              placeholder: 'Display name (optional)',
+              placeholder: '显示名称（可选）',
               onChange: event => setManualDeviceName(event.target.value),
             }),
-            h('button', { type: 'button', style: style.button, disabled: !manualDeviceId.trim(), onClick: addManualDevice }, 'Add')))),
+            h('button', { type: 'button', style: style.button, disabled: !manualDeviceId.trim(), onClick: addManualDevice }, '添加')))),
       h('details', { style: style.details },
-        h('summary', { style: style.summary }, 'New remote session'),
+        h('summary', { style: style.summary }, '新建远程会话'),
         h('div', { style: { display: 'grid', gap: 8, paddingTop: 8 } },
           h('div', { style: style.row },
             h('input', {
               style: { ...style.input, flex: '2 1 200px' },
               value: newSessionCwd,
-              placeholder: 'Working directory, e.g. /root',
+              placeholder: '工作目录，例如 /root',
               onChange: event => setNewSessionCwd(event.target.value),
             }),
             h('select', {
@@ -985,16 +985,16 @@ function RemoteSessionPage({ api }) {
               value: selectedModel,
               disabled: models.length === 0,
               onChange: event => setSelectedModel(event.target.value),
-              'aria-label': 'Model for the new session',
+              'aria-label': '新会话使用的模型',
             }, models.map(m => h('option', { key: m.id, value: m.id }, m.displayName))),
             h('button', {
               type: 'button', style: style.primaryButton, flex: '0 0 auto',
               disabled: loading || !machineId || !newSessionCwd.trim() || newSessionBusy,
               onClick: createRemoteSession,
-            }, newSessionBusy ? 'Creating...' : 'Create')))),
+            }, newSessionBusy ? '创建中…' : '创建')))),
       sessionOptions.length > 0
         ? h('div', { style: style.sessions }, sessionOptions.map(session => {
-            const flag = session.stale ? 'stale' : session.deviceStatus && session.deviceStatus !== 'online' ? session.deviceStatus : ''
+            const flag = session.stale ? '已过期' : session.deviceStatus && session.deviceStatus !== 'online' ? (session.deviceStatus === 'offline' ? '离线' : session.deviceStatus) : ''
             return h('button', {
               style: { ...style.session, ...(session.id === sessionId ? style.selected : {}) },
               className: 'mai-card-hover',
@@ -1002,26 +1002,26 @@ function RemoteSessionPage({ api }) {
               type: 'button',
               disabled: !session.cwd,
               onClick: () => openSession(session),
-              title: session.cwd ? `Open ${session.cwd}` : 'ACP session list did not provide a working directory',
+              title: session.cwd ? `打开 ${session.cwd}` : 'ACP 会话列表未提供工作目录',
             },
               h('span', { style: style.sessionTitle }, session.title || session.id),
-              h('span', { style: style.sessionMeta }, session.cwd || 'History requires a working directory from the runtime'),
+              h('span', { style: style.sessionMeta }, session.cwd || '加载历史需要 runtime 提供工作目录'),
               flag !== '' ? h('span', { style: { fontSize: 10.5, fontWeight: 650, color: session.stale ? t.text3 : '#8a6d1d', textTransform: 'uppercase', letterSpacing: '0.04em' } }, flag) : null)
           }))
-        : h('p', { style: style.subtitle }, machineId ? 'No sessions on this device yet. Create one above or refresh.' : 'Select a device to list its sessions.'))
+        : h('p', { style: style.subtitle }, machineId ? '该设备暂无会话。可在上方新建，或点击刷新。' : '请选择设备以列出其会话。'))
       : null,
     sessionId ? h('section', { style: style.card },
       h('div', { style: style.row },
         h('button', {
-          type: 'button', style: { ...style.button, flexShrink: 0 }, title: 'Close session and go back to the list',
-          onClick: () => { streamRef.current?.dispose(); streamRef.current = null; setSessionId(''); setTurnActive(false); setStopping(false); setStatus('Remote session closed') },
+          type: 'button', style: { ...style.button, flexShrink: 0 }, title: '关闭会话并返回列表',
+          onClick: () => { streamRef.current?.dispose(); streamRef.current = null; setSessionId(''); setTurnActive(false); setStopping(false); setStatus('远程会话已关闭') },
         }, '←'),
         h('strong', { style: { flex: 1, fontSize: 13.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, title }, title),
         h('select', {
           style: { ...style.input, flex: '0 1 190px', minWidth: 130 },
           value: currentModel,
           disabled: !hasControl || switchingModel || models.length === 0,
-          title: 'Switch model for this session',
+          title: '切换该会话的模型',
           onChange: event => {
             const next = event.target.value
             if (next && next !== currentModel) switchSessionModel(next)
@@ -1041,17 +1041,17 @@ function RemoteSessionPage({ api }) {
           } },
         historyLoading
           ? h('div', { style: { fontSize: 12.5, color: t.text3, textAlign: 'center', padding: '32px 12px' } },
-              displayEntries.length > 0 ? `Loading session history… (${displayEntries.length} entries loaded)` : 'Loading session history…')
+              displayEntries.length > 0 ? `正在加载会话历史…（已加载 ${displayEntries.length} 条）` : '正在加载会话历史…')
           : h(React.Fragment, null,
               displayEntries.length > visibleCount
-                ? h('div', { style: { fontSize: 11, color: t.text3, textAlign: 'center', padding: '6px 0' } }, `${displayEntries.length - visibleCount} earlier messages — scroll up to load more`)
+                ? h('div', { style: { fontSize: 11, color: t.text3, textAlign: 'center', padding: '6px 0' } }, `还有 ${displayEntries.length - visibleCount} 条更早的消息 — 向上滚动加载`)
                 : null,
               displayEntries.slice(-visibleCount).map(entry => {
         if (entry.kind === 'thought') {
           return h('div', { style: { display: 'flex', gap: 8, alignItems: 'flex-start', justifyContent: 'flex-start' }, key: entry.key },
             h('div', { style: { ...style.avatar, background: '#8a5fd0' } }, '···'),
             h('details', { style: style.thought },
-              h('summary', { style: style.thoughtSummary }, 'Thinking'),
+              h('summary', { style: style.thoughtSummary }, '思考过程'),
               h('p', { style: { margin: '6px 0 0', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', color: '#5b4a72', fontStyle: 'italic' } }, entry.text || '')))
         }
         if (entry.kind === 'message') {
@@ -1066,7 +1066,7 @@ function RemoteSessionPage({ api }) {
               isUser
                 ? h('p', { style: { margin: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' } }, entry.text || '')
                 : h('div', { className: 'mai-md' }, renderMarkdown(entry.text || ''))),
-            isUser ? h('div', { style: { ...style.avatar, background: avatarColor } }, 'You') : null)
+            isUser ? h('div', { style: { ...style.avatar, background: avatarColor } }, '我') : null)
         }
         if (entry.kind === 'tool') {
           const statusLabel = entry.status ? (TOOL_STATUS_LABEL[entry.status] ?? entry.status) : 'running'
@@ -1075,15 +1075,15 @@ function RemoteSessionPage({ api }) {
           const statusBg = entry.status === 'completed' ? '#e9f5ee' : entry.status === 'failed' ? t.dangerBg : '#fdf6e3'
           return h('details', { style: { ...style.event, padding: '6px 11px', background: t.surface }, key: entry.key },
             h('summary', { style: { ...style.row, cursor: 'pointer', userSelect: 'none', listStyle: 'none' } },
-              h('span', { style: { fontSize: 10, fontWeight: 700, color: t.text3, textTransform: 'uppercase', letterSpacing: '0.05em', flexShrink: 0 } }, 'Tool'),
-              h('span', { style: { fontSize: 12.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 } }, entry.title || 'Working'),
+              h('span', { style: { fontSize: 10, fontWeight: 700, color: t.text3, textTransform: 'uppercase', letterSpacing: '0.05em', flexShrink: 0 } }, '工具'),
+              h('span', { style: { fontSize: 12.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 } }, entry.title || '执行中'),
               running ? h('span', { className: 'mai-pulse', style: { ...style.dot, width: 6, height: 6, background: '#d4a72c' } }) : null,
               h('span', { style: { fontSize: 10.5, padding: '1px 8px', borderRadius: 999, background: statusBg, color: statusColor, fontWeight: 650, flexShrink: 0 } }, statusLabel)),
             entry.detail ? h('pre', { style: { margin: '6px 0 0', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontSize: 11.5, maxHeight: 320, overflowY: 'auto', background: t.surfaceAlt, borderRadius: 6, padding: '8px 10px' } }, entry.detail) : null)
         }
         if (entry.kind === 'plan') {
           return h('article', { style: style.event, key: entry.key },
-            h('div', { style: { fontSize: 10.5, fontWeight: 700, color: t.text3, marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.04em' } }, 'Plan'),
+            h('div', { style: { fontSize: 10.5, fontWeight: 700, color: t.text3, marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.04em' } }, '计划'),
             ...entry.entries.map((item, index) => h('div', { style: { display: 'flex', gap: 6, fontSize: 12.5, margin: '2px 0' }, key: index },
               h('span', { style: { opacity: 0.55 } }, index + 1 + '.'),
               h('span', { style: { textDecoration: item.status === 'completed' ? 'line-through' : 'none', opacity: item.status === 'completed' ? 0.55 : 1 } },
@@ -1095,7 +1095,7 @@ function RemoteSessionPage({ api }) {
         return h('article', { style: style.event, key: entry.key },
           h('div', { style: { opacity: 0.6, fontSize: 11, marginBottom: 4 } }, entry.label),
           h('details', null,
-            h('summary', { style: style.summary }, 'Show details'),
+            h('summary', { style: style.summary }, '查看详情'),
             h('pre', { style: { margin: '5px 0 0', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontSize: 11.5 } }, JSON.stringify(entry.data ?? {}, null, 2))))
           })
         )
@@ -1115,26 +1115,26 @@ function RemoteSessionPage({ api }) {
               sendPrompt()
             }
           },
-          placeholder: hasControl ? 'Send an instruction to the remote session (Enter to send, Shift+Enter for a new line)' : 'Read-only: session:control is required to send instructions',
+          placeholder: hasControl ? '向远程会话下发指令（回车发送，Shift+回车换行）' : '只读模式：下发指令需要 session:control 权限',
           disabled: !hasControl,
         }),
         turnActive
           ? h('button', {
               type: 'button', style: style.stopButton, disabled: !hasControl || stopping,
-              onClick: stopTurn, title: stopping ? 'Stopping…' : 'Stop the current turn',
-              'aria-label': 'Stop the current turn',
+              onClick: stopTurn, title: stopping ? '停止中…' : '停止当前回合',
+              'aria-label': '停止当前回合',
             },
               h('span', { style: style.stopIcon }))
           : h('button', {
               type: 'submit', style: style.sendButton,
               disabled: !streamRef.current || !hasControl || prompt.trim() === '',
-              title: 'Send (Enter)', 'aria-label': 'Send instruction',
+              title: '发送（回车）', 'aria-label': '发送指令',
             },
               h('svg', { width: 16, height: 16, viewBox: '0 0 16 16', fill: 'none', 'aria-hidden': 'true', style: { display: 'block' } },
                 h('path', { d: 'M8 12.5V3.5M8 3.5L4 7.5M8 3.5L12 7.5', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' })))),
       lastDelivery || turnActive ? h('div', { style: { fontSize: 11.5, color: turnActive ? t.accent : lastDelivery?.accepted ? t.success : lastDelivery?.frame === 'pending' ? t.text3 : t.danger, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 } },
         turnActive ? h('span', { className: 'mai-pulse', style: { ...style.dot, background: t.accent } }) : null,
-        turnActive ? (stopping ? 'Stopping the current turn…' : 'MonkeyAI is working…') : lastDelivery?.accepted ? 'Turn finished' : lastDelivery?.frame === 'pending' ? 'Delivery pending' : 'Delivery rejected') : null)
+        turnActive ? (stopping ? '正在停止当前回合…' : 'MonkeyAI 正在处理…') : lastDelivery?.accepted ? '回合已结束' : lastDelivery?.frame === 'pending' ? '等待投递' : '投递被拒绝') : null)
       : null)
 }
 
@@ -1166,8 +1166,8 @@ export async function apply(ctx) {
         type: 'button',
         style: { width: '100%', height: '100%', padding: 0, border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
         onClick: () => owner.layout.selectPanel(PANEL_ID),
-        'aria-label': 'MonkeyAI sessions',
-        title: 'MonkeyAI Sessions',
+        'aria-label': 'MonkeyAI 会话',
+        title: 'MonkeyAI 会话',
       }, h(MonkeyIcon, { size: 18 }))
       owner.slots.inject('main', () => owner.slots.register({
         name: 'main', key: PANEL_ID, inject: () => ({ api }),

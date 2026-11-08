@@ -620,7 +620,7 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
       }
       return {
         switched: false,
-        message: 'This MonkeyAI runtime does not support switching models on an active session. Create a new session to use a different model.',
+        message: '该 MonkeyAI runtime 不支持在活跃会话上切换模型，请新建会话使用其他模型。',
       }
     } finally {
       acp.close()
@@ -665,7 +665,7 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
       // oversized single frame; both end the stream.
       const pushed = events.push(frame)
       if (pushed === false) {
-        const reason = new Error('Remote session event queue exceeded its limit')
+        const reason = new Error('远程会话事件队列超出上限')
         controller.abort(reason)
         currentAcp?.close(reason)
         return false
@@ -793,7 +793,7 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
             return
           }
           reconnectsUsed += 1
-          emit({ type: 'reconnecting', sessionId: selectedSession, message: `History replay interrupted - reconnecting to continue loading (${reconnectsUsed}/${MAX_REPLAY_RECONNECTS})` })
+          emit({ type: 'reconnecting', sessionId: selectedSession, message: `历史回放中断，正在重连以继续加载（${reconnectsUsed}/${MAX_REPLAY_RECONNECTS}）` })
           void (async () => {
             try {
               await establishAcp(true)
@@ -802,7 +802,7 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
                 type: 'error',
                 sessionId: selectedSession,
                 code: 'acp_connection_closed',
-                message: reconnectError instanceof Error ? reconnectError.message : 'Remote session connection closed',
+                message: reconnectError instanceof Error ? reconnectError.message : '远程会话连接已关闭',
               })
               controller.abort(reason)
               events.close()
@@ -814,7 +814,7 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
         // keep working (the runtime binds sessions per connection).
         if (loadCompleted && reconnectsUsed < MAX_REPLAY_RECONNECTS) {
           reconnectsUsed += 1
-          emit({ type: 'reconnecting', sessionId: selectedSession, message: 'Remote connection dropped - reconnecting' })
+          emit({ type: 'reconnecting', sessionId: selectedSession, message: '远程连接中断，正在重连' })
           void (async () => {
             try {
               await establishAcp(true)
@@ -824,7 +824,7 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
                 type: 'error',
                 sessionId: selectedSession,
                 code: 'acp_connection_closed',
-                message: reconnectError instanceof Error ? reconnectError.message : 'Remote session connection closed',
+                message: reconnectError instanceof Error ? reconnectError.message : '远程会话连接已关闭',
               })
               controller.abort(reason)
               events.close()
@@ -836,14 +836,14 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
           type: 'error',
           sessionId: selectedSession,
           code: 'acp_connection_closed',
-          message: 'Remote session connection closed',
+          message: '远程会话连接已关闭',
         })
         controller.abort(reason)
         events.close()
       })
       unsubscribe = () => { unsubscribeThis(); unsubscribe = () => {} }
       unsubscribeClose = () => { unsubscribeCloseThis(); unsubscribeClose = () => {} }
-      if (signal.aborted) throw signal.reason ?? new Error('Remote session cancelled')
+      if (signal.aborted) throw signal.reason ?? new Error('远程会话已取消')
 
       const initialized = await acp.request('initialize', {
         protocolVersion: 1,
@@ -883,7 +883,7 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
             type: 'session_missing',
             sessionId: selectedSession,
             code: 'session_not_found',
-            message: 'This session no longer exists on the selected device (the runtime may have been reset). Create a new session instead.',
+            message: '该会话在所选设备上已不存在（runtime 可能已重置），请新建会话。',
           })
           connection.sessionMissing = true
           return
@@ -902,7 +902,7 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
             type: 'history_incomplete',
             sessionId: selectedSession,
             code: 'history_load_failed',
-            message: 'History replay was repeatedly cut off by the remote runtime; showing only the messages received so far.',
+            message: '历史回放被远程 runtime 反复中断，仅显示已收到的消息。',
           })
           loadCompleted = true
         }
@@ -914,12 +914,12 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
       grantRef = await this.getGrant(accountId)
       this.requireScope(grantRef, 'device:connect')
       this.requireScope(grantRef, 'session:read')
-      if (signal.aborted) throw signal.reason ?? new Error('Remote session cancelled')
+      if (signal.aborted) throw signal.reason ?? new Error('远程会话已取消')
 
       const token = await this.refreshAccessToken(accountId, signal)
       const ticket = await this.requestConnectionTicket(accountId, grantRef, token, target, { signal })
       ticketValue = ticket.ticket
-      if (signal.aborted) throw signal.reason ?? new Error('Remote session cancelled')
+      if (signal.aborted) throw signal.reason ?? new Error('远程会话已取消')
 
       // Load the full history over the runtime's HTTP read channel before the
       // ACP connection starts. The ACP session/load replay only streams a
@@ -959,7 +959,7 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
           try {
             const currentGrant = await this.getGrant(accountId)
             if (!currentGrant.token.scopes.includes('session:read')) {
-              emit({ type: 'error', sessionId: selectedSession, code: 'read_permission_revoked', message: 'Session read permission is no longer available' })
+              emit({ type: 'error', sessionId: selectedSession, code: 'read_permission_revoked', message: '会话读取权限已失效' })
               controller.abort(new Error('Session read permission was revoked'))
               currentAcp?.close(new Error('Session read permission was revoked'))
               events.close()
@@ -973,7 +973,7 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
               continue
             }
 
-            if (!currentAcp) throw new Error('ACP connection is re-establishing')
+            if (!currentAcp) throw new Error('ACP 连接正在重建')
 
             if (command.type === 'switch_model') {
               try {
@@ -1017,7 +1017,7 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
                   type: 'delivery',
                   sessionId: selectedSession,
                   data: { accepted: false, code: 'remote_rejected' },
-                  message: promptError instanceof Error ? promptError.message : 'Remote runtime rejected the instruction',
+                  message: promptError instanceof Error ? promptError.message : '远程 runtime 拒绝了该指令',
                 })
               }
               continue
@@ -1043,7 +1043,7 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
               continue
             }
 
-            emit({ type: 'error', sessionId: selectedSession, code: 'invalid_command', message: 'Remote command is unsupported' })
+            emit({ type: 'error', sessionId: selectedSession, code: 'invalid_command', message: '不支持该远程命令' })
           } catch (error) {
             if (signal.aborted) return
             const requestId = command.type === 'respond' ? command.requestId : undefined
@@ -1061,9 +1061,9 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
       })()
       commandPump.catch(() => {
         if (signal.aborted) return
-        emit({ type: 'error', sessionId: selectedSession, code: 'command_channel_closed', message: 'Remote command channel closed' })
-        controller.abort(new Error('Remote command channel closed'))
-        currentAcp?.close(new Error('Remote command channel closed'))
+        emit({ type: 'error', sessionId: selectedSession, code: 'command_channel_closed', message: '远程命令通道已关闭' })
+        controller.abort(new Error('远程命令通道已关闭'))
+        currentAcp?.close(new Error('远程命令通道已关闭'))
         events.close()
       })
 
