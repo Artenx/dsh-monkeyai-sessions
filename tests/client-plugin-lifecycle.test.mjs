@@ -76,6 +76,9 @@ function createReactStub(initialState) {
       stateIndex = 0
       effectCleanups.length = 0
     },
+    getStates() {
+      return [...states]
+    },
     runEffectCleanups() {
       for (const cleanup of effectCleanups.splice(0)) {
         try { cleanup() } catch {}
@@ -358,8 +361,11 @@ test('Client plugin releases its panel, active stream, and Remote mount on unloa
   }
   assert.ok(findAriaLabel(loadedTree, '会话状态：空闲'))
 
-  await disposePlugin()
+  resolveNext({ done: true })
   await runningSession
+  assert.ok(React.getStates().includes('idle'))
+
+  await disposePlugin()
   await mainEntry.cleanup()
 
   assert.equal(streamDisposals, 1)

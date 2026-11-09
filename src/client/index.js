@@ -548,8 +548,9 @@ function RemoteSessionPage({ api }) {
     setVisibleCount(RECENT_LIMIT)
     setHistoryLoading(true)
     setStatus('正在连接远程会话')
+    let stream
     try {
-      const stream = api.followSession({ accountId, machineId, sessionId: session.id, cwd: session.cwd })
+      stream = api.followSession({ accountId, machineId, sessionId: session.id, cwd: session.cwd })
       streamRef.current = stream
       setStatus('远程会话已连接')
       for await (const frame of stream) {
@@ -619,18 +620,18 @@ function RemoteSessionPage({ api }) {
         }
         if (frame.type === 'error') setError(frame.message || frame.code || '远程会话错误')
       }
+      if (streamRef.current !== stream) return
       setStatus('远程会话已断开')
       setHistoryLoading(false)
       setTurnActive(false)
       setStopping(false)
-      setSessionStatus('')
     } catch (reason) {
+      if (stream && streamRef.current !== stream) return
       setStatus('远程会话不可用')
       setError(errorText(reason))
       setHistoryLoading(false)
       setTurnActive(false)
       setStopping(false)
-      setSessionStatus('')
     }
   }
 
