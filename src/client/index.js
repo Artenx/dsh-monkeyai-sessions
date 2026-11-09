@@ -560,6 +560,7 @@ function RemoteSessionPage({ api }) {
           historyLoadedRef.current = true
           setStatus('历史已加载')
           setHistoryLoading(false)
+          setSessionStatus(current => current || 'idle')
           if (frame.model) setCurrentModel(frame.model)
         }
         if (frame.type === 'history_incomplete') {

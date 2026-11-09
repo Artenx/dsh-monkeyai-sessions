@@ -82,8 +82,9 @@ function createReactStub(initialState) {
       }
     },
     getEffectCleanup() {
+      const cleanups = effectCleanups.splice(0)
       return async () => {
-        for (const cleanup of effectCleanups.splice(0)) {
+        for (const cleanup of cleanups) {
           try { await cleanup() } catch {}
         }
       }
@@ -194,6 +195,19 @@ function findOpenSessionButton(node) {
   return findOpenSessionButton(node.children)
 }
 
+function findAriaLabel(node, label) {
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const match = findAriaLabel(child, label)
+      if (match) return match
+    }
+    return undefined
+  }
+  if (!node || typeof node !== 'object') return undefined
+  if (node.props?.['aria-label'] === label) return node
+  return findAriaLabel(node.children, label)
+}
+
 test('Client plugin releases its panel, active stream, and Remote mount on unload', async () => {
   const account = { accountId: 'account-1', serverOrigin: 'https://monkeyai.example', scopes: ['session:read'], expiresAt: 1 }
   const deviceId = '123e4567-e89b-12d3-a456-426614174000'
@@ -231,6 +245,7 @@ test('Client plugin releases its panel, active stream, and Remote mount on unloa
   let streamDisposals = 0
   let mountedContribution
   let resolveNext
+  let nextCount = 0
   let stream
 
   const api = {
@@ -240,7 +255,7 @@ test('Client plugin releases its panel, active stream, and Remote mount on unloa
       stream = {
         [Symbol.asyncIterator]() {
           return {
-            next: () => new Promise(resolve => { resolveNext = resolve }),
+            next: () => new Promise(resolve => { nextCount += 1; resolveNext = resolve }),
           }
         },
         dispose() {
@@ -325,10 +340,23 @@ test('Client plugin releases its panel, active stream, and Remote mount on unloa
   const pageElement = mainEntry.component({ api })
   const pageTree = pageElement.type(pageElement.props)
   mainEntry.cleanup = React.getEffectCleanup()
+  const initialCleanup = mainEntry.cleanup
   const openButton = findOpenSessionButton(pageTree)
   assert.ok(openButton)
   const runningSession = openButton.props.onClick()
   assert.ok(stream)
+
+  resolveNext({ done: false, value: { type: 'history_loaded' } })
+  while (nextCount < 2) await new Promise(resolve => setImmediate(resolve))
+  React.resetForRender()
+  const loadedPage = mainEntry.component({ api })
+  const loadedTree = loadedPage.type(loadedPage.props)
+  const loadedCleanup = React.getEffectCleanup()
+  mainEntry.cleanup = async () => {
+    await loadedCleanup()
+    await initialCleanup()
+  }
+  assert.ok(findAriaLabel(loadedTree, '会话状态：空闲'))
 
   await disposePlugin()
   await runningSession
