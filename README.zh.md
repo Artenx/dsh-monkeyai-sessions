@@ -28,7 +28,7 @@ https://artenx.github.io/dsh-monkeyai-sessions/index.json
 npm install
 npm run build
 npm pack
-dsh plugin --profile web add ./dsh-monkeyai-sessions-0.1.3.tgz
+dsh plugin --profile web add ./dsh-monkeyai-sessions-0.1.4.tgz
 ```
 
 已在真实的 DSH `0.2.2-rc.1` web profile 与在线 MonkeyAI runtime 上端到端验证：授权、完整历史加载、指令下发、模型切换、回合取消均正常工作。
@@ -47,7 +47,7 @@ dsh plugin --profile web add ./dsh-monkeyai-sessions-0.1.3.tgz
 
 完整对话历史通过 runtime 的 HTTP 读取通道加载（`POST {http_base}/read/session`，方法 `_monkeyai/session/messages`，按游标翻页），而不是 ACP `session/load` 的有界回放，因此长会话能看到每一轮内容，包括最新回复。会话使用与 MonkeyAI 客户端相同的 `historyHTTP` 能力挂载后，面板会订阅 ACP 实时更新：在 MonkeyAI 桌面客户端发起的用户消息和助手回复都会边生成边显示，无需刷新。对于 runtime 先持久化再通知的超大回复，收到 `history_changed` 后会按游标增量读取，并用完整快照补齐部分内容。
 
-回合执行期间输入框旁会显示停止按钮，点击发送 `session/cancel`；模型切换在会话自己的连接上调用 `_monkeyai/session/model/set`。助手消息支持轻量 Markdown 渲染（代码块、行内代码、粗体、标题、列表）。
+会话标题旁会显示会话状态徽章（进行中 / 空闲 / 出错 / 已中断），数据来自 runtime 广播的 `_monkeyai/session/state` 通知，因此由 MonkeyAI 桌面客户端发起的回合同样会显示为「进行中」——打开面板时如果回合已经在跑，Host 会主动读取一次当前状态补齐。回合执行期间（无论哪一端发起）输入框旁会显示停止按钮，点击发送 `session/cancel`；模型切换在会话自己的连接上调用 `_monkeyai/session/model/set`。助手消息支持轻量 Markdown 渲染（代码块、行内代码、粗体、标题、列表）。
 
 ## 界面说明
 

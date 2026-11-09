@@ -184,6 +184,15 @@ function installAcpAgent() {
     const target = String(url)
     if (target.endsWith('/read/session')) {
       const body = JSON.parse(init.body)
+      if (body.method === '_monkeyai/session/state/get') {
+        return jsonResponse({
+          result: {
+            sessionId: 'history-session',
+            eventSeq: 12,
+            state: { status: 'running', files: [], tasks: [], plan: [], resourceIds: [], resourcePreferences: {} },
+          },
+        })
+      }
       FakeWebSocket.readSessionRequests.push(body)
       FakeWebSocket.historyReadCount += 1
       if (FakeWebSocket.historyReadCount > 2) {
@@ -277,6 +286,9 @@ test('followSession streams history and live notifications for the selected sess
     await waitFor(() => frames.some(frame => frame.type === 'notification'
       && frame.data?.update?.content?.text === 'hello from history'), 'history notification')
     await waitFor(() => frames.some(frame => frame.data?._meta?.messageId === 'm-catchup'), 'post-mount history catch-up')
+    await waitFor(() => frames.some(frame => frame.type === 'notification'
+      && frame.method === '_monkeyai/session/state'
+      && frame.data?.state?.status === 'running'), 'initial session state seed')
 
     // Full history arrives over the HTTP read channel before the ACP replay;
     // the replayed m1 chunk is suppressed as a duplicate of the HTTP snapshot.
@@ -329,6 +341,22 @@ test('followSession streams history and live notifications for the selected sess
     } }))
     await waitFor(() => frames.some(frame => frame.type === 'notification'
       && frame.data?.update?.content?.text === 'reply from external client'), 'external live notification')
+
+    // The runtime broadcasts turn state to every subscribed client; the panel
+    // must surface it so a remote-initiated turn shows as 进行中.
+    FakeWebSocket.instances[0].serverSend({ jsonrpc: '2.0', method: '_monkeyai/session/state', params: {
+      sessionId: 'history-session', eventSeq: 13, state: { status: 'running' },
+    } })
+    await waitFor(() => frames.some(frame => frame.type === 'notification'
+      && frame.method === '_monkeyai/session/state'
+      && frame.data?.state?.status === 'running'
+      && frame.data?.eventSeq === 13), 'remote turn running state')
+    FakeWebSocket.instances[0].serverSend({ jsonrpc: '2.0', method: '_monkeyai/session/state', params: {
+      sessionId: 'history-session', eventSeq: 14, state: { status: 'idle' }, finish: true,
+    } })
+    await waitFor(() => frames.some(frame => frame.type === 'notification'
+      && frame.method === '_monkeyai/session/state'
+      && frame.data?.state?.status === 'idle'), 'remote turn idle state')
 
     // Oversized replies are represented by a history_changed notification;
     // refresh the HTTP cursor window and replace any partial message snapshot.

@@ -99,6 +99,20 @@ test('projection reads messageId from notification _meta for MonkeyAI runtime an
   assert.equal(entries[0].text, 'Hello world')
 })
 
+test('projection renders session state transitions as system lines, not raw dumps', () => {
+  const frames = [
+    { type: 'notification', method: '_monkeyai/session/state', data: { sessionId: 's', eventSeq: 1, state: { status: 'running' } } },
+    { type: 'notification', method: '_monkeyai/session/state', data: { sessionId: 's', eventSeq: 2, state: { status: 'idle' }, finish: true } },
+    { type: 'notification', method: '_monkeyai/session/state', data: { sessionId: 's', eventSeq: 3, state: { status: 'error' } } },
+    { type: 'notification', method: '_monkeyai/session/state', data: { sessionId: 's', eventSeq: 4, state: { status: 'interrupted' } } },
+    { type: 'notification', method: '_monkeyai/session/state', data: { sessionId: 's', eventSeq: 5, state: { title: 'rename only' } } },
+    { type: 'notification', method: '_monkeyai/session/history_changed', data: { sessionId: 's', eventSeq: 6 } },
+  ]
+  const entries = projectFrames(frames)
+  assert.deepEqual(entries.map(e => e.label), ['会话状态：进行中', '会话状态：空闲', '会话状态：出错', '会话状态：已中断'])
+  assert.ok(entries.every(e => e.kind === 'system'))
+})
+
 test('projection reads toolCallId from update _meta.parentToolCallId', () => {
   const frames = [
     { type: 'notification', method: 'session/update', data: { _meta: { messageId: 'a1' }, update: { sessionUpdate: 'tool_call', _meta: { parentToolCallId: 'call_abc' }, title: 'Search', status: 'in_progress', content: [{ type: 'text', text: 'grep foo' }] } } },

@@ -1,6 +1,6 @@
 import React from 'react'
 import { TYPERT_REMOTE } from '../remote.js'
-import { projectFrames, TOOL_STATUS_LABEL } from '../shared/projection.mjs'
+import { projectFrames, TOOL_STATUS_LABEL, SESSION_STATUS_LABEL } from '../shared/projection.mjs'
 
 const PANEL_ID = 'monkeyai-sessions'
 const MANUAL_DEVICES_KEY = 'monkeyai-sessions/manual-devices'
@@ -290,6 +290,7 @@ function RemoteSessionPage({ api }) {
   const [visibleCount, setVisibleCount] = useState(RECENT_LIMIT)
   const [turnActive, setTurnActive] = useState(false)
   const [stopping, setStopping] = useState(false)
+  const [sessionStatus, setSessionStatus] = useState('')
   const [signInEmail, setSignInEmail] = useState('')
   const [signInPassword, setSignInPassword] = useState('')
   const streamRef = useRef(null)
@@ -540,6 +541,7 @@ function RemoteSessionPage({ api }) {
     setLastDelivery(undefined)
     setTurnActive(false)
     setStopping(false)
+    setSessionStatus('')
     setError('')
     setAnswerText('')
     setCurrentModel('')
@@ -582,6 +584,14 @@ function RemoteSessionPage({ api }) {
         if (frame.type === 'request') {
           setPendingRequests(current => [...current.filter(item => item.requestId !== frame.requestId), frame])
         }
+        if (frame.type === 'notification' && frame.method === '_monkeyai/session/state') {
+          const status = frame.data?.state?.status
+          if (typeof status === 'string' && SESSION_STATUS_LABEL[status]) {
+            setSessionStatus(status)
+            setTurnActive(status === 'running')
+            if (status !== 'running') setStopping(false)
+          }
+        }
         if (frame.type === 'delivery') {
           const accepted = Boolean(frame.data?.accepted)
           setLastDelivery({ accepted, code: frame.data?.code, frame: frame.type })
@@ -612,12 +622,14 @@ function RemoteSessionPage({ api }) {
       setHistoryLoading(false)
       setTurnActive(false)
       setStopping(false)
+      setSessionStatus('')
     } catch (reason) {
       setStatus('远程会话不可用')
       setError(errorText(reason))
       setHistoryLoading(false)
       setTurnActive(false)
       setStopping(false)
+      setSessionStatus('')
     }
   }
 
@@ -1014,9 +1026,21 @@ function RemoteSessionPage({ api }) {
       h('div', { style: style.row },
         h('button', {
           type: 'button', style: { ...style.button, flexShrink: 0 }, title: '关闭会话并返回列表',
-          onClick: () => { streamRef.current?.dispose(); streamRef.current = null; setSessionId(''); setTurnActive(false); setStopping(false); setStatus('远程会话已关闭') },
+          onClick: () => { streamRef.current?.dispose(); streamRef.current = null; setSessionId(''); setTurnActive(false); setStopping(false); setSessionStatus(''); setStatus('远程会话已关闭') },
         }, '←'),
         h('strong', { style: { flex: 1, fontSize: 13.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, title }, title),
+        sessionStatus ? h('span', {
+          style: {
+            ...style.statusBadge,
+            background: sessionStatus === 'running' ? t.accentSoft : sessionStatus === 'error' ? t.dangerBg : t.surfaceAlt,
+            borderColor: sessionStatus === 'running' ? t.accent : sessionStatus === 'error' ? t.dangerBorder : t.border,
+            color: sessionStatus === 'running' ? t.accent : sessionStatus === 'error' ? t.danger : t.text2,
+          },
+          title: '会话状态（含远端客户端发起的回合）',
+          'aria-label': `会话状态：${SESSION_STATUS_LABEL[sessionStatus]}`,
+        },
+          sessionStatus === 'running' ? h('span', { className: 'mai-pulse', style: { ...style.dot, background: t.accent } }) : null,
+          SESSION_STATUS_LABEL[sessionStatus]) : null,
         h('select', {
           style: { ...style.input, flex: '0 1 190px', minWidth: 130 },
           value: currentModel,
@@ -1134,7 +1158,7 @@ function RemoteSessionPage({ api }) {
                 h('path', { d: 'M8 12.5V3.5M8 3.5L4 7.5M8 3.5L12 7.5', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' })))),
       lastDelivery || turnActive ? h('div', { style: { fontSize: 11.5, color: turnActive ? t.accent : lastDelivery?.accepted ? t.success : lastDelivery?.frame === 'pending' ? t.text3 : t.danger, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 } },
         turnActive ? h('span', { className: 'mai-pulse', style: { ...style.dot, background: t.accent } }) : null,
-        turnActive ? (stopping ? '正在停止当前回合…' : 'MonkeyAI 正在处理…') : lastDelivery?.accepted ? '回合已结束' : lastDelivery?.frame === 'pending' ? '等待投递' : '投递被拒绝') : null)
+        turnActive ? (stopping ? '正在停止当前回合…' : sessionStatus === 'running' ? 'MonkeyAI 正在处理（远端客户端发起）…' : 'MonkeyAI 正在处理…') : lastDelivery?.accepted ? '回合已结束' : lastDelivery?.frame === 'pending' ? '等待投递' : '投递被拒绝') : null)
       : null)
 }
 

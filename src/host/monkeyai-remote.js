@@ -971,6 +971,24 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
         if (httpHistoryComplete) {
           historyRefreshPromise = historyRefreshPromise.then(() => refreshPersistedHistory())
           await historyRefreshPromise
+          // The desktop client tracks turn state via _monkeyai/session/state
+          // notifications. Seed the panel with the current status so a turn
+          // already running when the panel opens is shown as 进行中.
+          try {
+            const state = await readSessionState({ httpBase: ticketHttpBase, ticket: ticketValue, sessionId: selectedSession, signal })
+            const status = state?.state?.status
+            if (typeof status === 'string' && ['running', 'idle', 'error', 'interrupted'].includes(status)) {
+              emit({
+                type: 'notification',
+                sessionId: selectedSession,
+                method: '_monkeyai/session/state',
+                data: { sessionId: selectedSession, state: { status }, eventSeq: state.eventSeq },
+              })
+            }
+          } catch {
+            // Older runtimes may not expose the state read; live notifications
+            // still drive the status once the next turn starts.
+          }
         }
       } catch (error) {
         if (signal?.aborted) throw error
@@ -1357,6 +1375,34 @@ async function readSessionHistoryPage({ httpBase, ticket, sessionId, cursor, dir
   const result = data?.result
   if (!result || !Array.isArray(result.messages)) {
     throw new Error('MonkeyAI history read returned an invalid response')
+  }
+  return result
+}
+
+async function readSessionState({ httpBase, ticket, sessionId, signal }) {
+  const timeout = AbortSignal.any([AbortSignal.timeout(15_000), ...(signal ? [signal] : [])])
+  const response = await fetch(`${httpBase.endsWith('/') ? httpBase : `${httpBase}/`}read/session`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${ticket}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ method: '_monkeyai/session/state/get', params: { sessionId } }),
+    signal: timeout,
+  })
+  const text = await readHistoryBodyText(response).catch(error => {
+    if (response.ok) throw error
+    return ''
+  })
+  if (!response.ok) {
+    throw new Error(`MonkeyAI state read failed (${response.status}): ${text.slice(0, 200)}`)
+  }
+  let data
+  try {
+    data = JSON.parse(text)
+  } catch {
+    throw new Error('MonkeyAI state read returned invalid JSON')
+  }
+  const result = data?.result
+  if (!result || typeof result !== 'object' || !result.state || typeof result.state !== 'object') {
+    throw new Error('MonkeyAI state read returned an invalid response')
   }
   return result
 }

@@ -14,6 +14,10 @@ export const TOOL_STATUS_LABEL = Object.freeze({
   pending: '排队中', in_progress: '执行中', completed: '完成', failed: '失败', cancelled: '已取消',
 })
 
+export const SESSION_STATUS_LABEL = Object.freeze({
+  running: '进行中', idle: '空闲', error: '出错', interrupted: '已中断',
+})
+
 function contentText(content) {
   const blocks = Array.isArray(content) ? content : content === undefined || content === null ? [] : [content]
   const parts = []
@@ -139,7 +143,15 @@ function projectFrames(frames) {
     if (frame.type === 'request') { continue } // rendered as an approval card from pendingRequests
     if (frame.type === 'model_switched') { entries.push({ kind: 'system', label: `已切换模型：${frame.data?.model ?? '所选模型'}`, key: `sys-model:${entries.length}` }); continue }
     if (frame.type === 'model_switch_failed') { continue } // surfaced via the error banner
-    if (frame.type === 'notification' && typeof frame.method === 'string' && frame.method.startsWith('_monkeyai/')) { continue } // internal runtime state notifications
+    if (frame.type === 'notification' && typeof frame.method === 'string' && frame.method.startsWith('_monkeyai/')) {
+      if (frame.method === '_monkeyai/session/state') {
+        const status = frame.data?.state?.status
+        if (typeof status === 'string' && SESSION_STATUS_LABEL[status]) {
+          entries.push({ kind: 'system', label: `会话状态：${SESSION_STATUS_LABEL[status]}`, key: `sys-state:${entries.length}` })
+        }
+      }
+      continue // internal runtime state notifications
+    }
     if (frame.type === 'error') { entries.push({ kind: 'raw', label: frame.code || 'error', data: { message: frame.message || frame.code }, key: `sys-err:${entries.length}` }); continue }
     entries.push({ kind: 'raw', label: frame.method || frame.type, data: frame.data, key: `raw:${frame.type}:${entries.length}` })
   }
