@@ -1,6 +1,6 @@
 {
   "name": "dsh-monkeyai-sessions",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "在 DeepSeek Harness 中读取和继续 MonkeyAI 会话：查看完整对话历史、下发新指令，无缝接续之前在 MonkeyAI 客户端上的工作",
   "type": "module",
   "license": "MIT",

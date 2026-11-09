@@ -113,6 +113,8 @@ async function loadClientPlugin(React) {
         },
       },
     },
+    setTimeout,
+    clearTimeout,
   })
   return plugin
 }
@@ -249,12 +251,23 @@ test('Client plugin releases its panel, active stream, and Remote mount on unloa
   let mountedContribution
   let resolveNext
   let nextCount = 0
+  let followCount = 0
   let stream
 
   const api = {
     listAccounts: async () => [account],
     listModels: async () => ({ models: [] }),
     followSession() {
+      followCount += 1
+      if (followCount === 1) {
+        return {
+          [Symbol.asyncIterator]() {
+            return { next: () => Promise.reject(new Error('api gateway: Remote stream WebSocket failed')) }
+          },
+          dispose() { streamDisposals += 1 },
+          send() {},
+        }
+      }
       stream = {
         [Symbol.asyncIterator]() {
           return {
@@ -347,6 +360,8 @@ test('Client plugin releases its panel, active stream, and Remote mount on unloa
   const openButton = findOpenSessionButton(pageTree)
   assert.ok(openButton)
   const runningSession = openButton.props.onClick()
+  for (let i = 0; i < 150 && followCount < 2; i += 1) await new Promise(resolve => setTimeout(resolve, 10))
+  assert.equal(followCount, 2, 'the session stream should reconnect after a carrier failure')
   assert.ok(stream)
 
   resolveNext({ done: false, value: { type: 'history_loaded' } })

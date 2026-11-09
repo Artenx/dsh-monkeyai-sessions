@@ -94,6 +94,20 @@ function errorText(error) {
   return typeof error?.message === 'string' ? error.message : typeof error === 'string' ? error : '远程操作失败'
 }
 
+function withTimeout(promise, timeoutMs, label) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label}超时，请重试`)), timeoutMs)
+    Promise.resolve(promise).then(
+      value => { clearTimeout(timer); resolve(value) },
+      error => { clearTimeout(timer); reject(error) },
+    )
+  })
+}
+
+function isRemoteStreamCarrierError(error) {
+  return /api gateway: remote stream websocket (?:failed|closed)/i.test(errorText(error))
+}
+
 // Lightweight inline markdown: fenced code blocks, `code`, **bold**,
 // headings and bullet lists. Everything else renders as plain text so
 // remote content can never inject markup.
@@ -299,6 +313,7 @@ function RemoteSessionPage({ api }) {
   const authWindowRef = useRef(null)
   const eventsRef = useRef(null)
   const prevScrollHeightRef = useRef(null)
+  const streamGenerationRef = useRef(0)
   const title = useMemo(() => {
     const runtime = runtimeSessions.find(item => item.id === sessionId)
     const summary = summarySessions.find(item => item.id === sessionId)
@@ -320,6 +335,7 @@ function RemoteSessionPage({ api }) {
     })
     return () => {
       active = false
+      streamGenerationRef.current += 1
       streamRef.current?.dispose()
       streamRef.current = null
     }
@@ -489,6 +505,7 @@ function RemoteSessionPage({ api }) {
     setError('')
     setLoading(true)
     try {
+      streamGenerationRef.current += 1
       const result = await unwrap(api.listDevices({ accountId, page: 1 }))
       setDevices(result.items)
       const first = result.items.length > 0 ? result.items[0].machineId : ''
@@ -513,25 +530,33 @@ function RemoteSessionPage({ api }) {
     setError('')
     setLoading(true)
     setSessionId('')
+    streamGenerationRef.current += 1
     streamRef.current?.dispose()
     streamRef.current = null
     setFrames([])
     setPendingRequests([])
-    const results = await Promise.allSettled([
-      unwrap(api.listSessions({ accountId, machineId: mid, page: 1, pageSize: 50 })),
-      unwrap(api.listRuntimeSessions({ accountId, machineId: mid })),
-    ])
-    const errors = []
-    if (results[0].status === 'fulfilled') setSummarySessions(results[0].value.items)
-    else errors.push(`会话摘要索引：${errorText(results[0].reason)}`)
-    if (results[1].status === 'fulfilled') setRuntimeSessions(results[1].value.sessions)
-    else errors.push(`ACP 会话列表：${errorText(results[1].reason)}`)
-    setStatus(errors.length === 0 ? '会话已刷新' : '部分会话来源不可用')
-    setError(errors.join('\n'))
-    setLoading(false)
+    try {
+      const results = await Promise.allSettled([
+        withTimeout(Promise.resolve().then(() => unwrap(api.listSessions({ accountId, machineId: mid, page: 1, pageSize: 50 }))), 50_000, '会话摘要读取'),
+        withTimeout(Promise.resolve().then(() => unwrap(api.listRuntimeSessions({ accountId, machineId: mid }))), 50_000, 'ACP 会话列表读取'),
+      ])
+      const errors = []
+      if (results[0].status === 'fulfilled') setSummarySessions(results[0].value.items)
+      else errors.push(`会话摘要索引：${errorText(results[0].reason)}`)
+      if (results[1].status === 'fulfilled') setRuntimeSessions(results[1].value.sessions)
+      else errors.push(`ACP 会话列表：${errorText(results[1].reason)}`)
+      setStatus(errors.length === 0 ? '会话已刷新' : '部分会话来源不可用')
+      setError(errors.join('\n'))
+    } catch (reason) {
+      setStatus('会话刷新失败')
+      setError(errorText(reason))
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function openSession(session) {
+    const generation = ++streamGenerationRef.current
     streamRef.current?.dispose()
     streamRef.current = null
     historyLoadedRef.current = false
@@ -548,90 +573,113 @@ function RemoteSessionPage({ api }) {
     setVisibleCount(RECENT_LIMIT)
     setHistoryLoading(true)
     setStatus('正在连接远程会话')
-    let stream
-    try {
-      stream = api.followSession({ accountId, machineId, sessionId: session.id, cwd: session.cwd })
-      streamRef.current = stream
-      setStatus('远程会话已连接')
-      for await (const frame of stream) {
-        setFrames(current => [...current, frame])
-        if (frame.type === 'ready' && !historyLoadedRef.current) setStatus('正在回放会话历史')
-        if (frame.type === 'reconnecting') setStatus(frame.message || '正在重连远程 runtime')
-        if (frame.type === 'history_loaded') {
-          historyLoadedRef.current = true
-          setStatus('历史已加载')
-          setHistoryLoading(false)
-          setSessionStatus(current => current || 'idle')
-          if (frame.model) setCurrentModel(frame.model)
+    let retries = 0
+    while (streamGenerationRef.current === generation) {
+      let stream
+      try {
+        stream = api.followSession({ accountId, machineId, sessionId: session.id, cwd: session.cwd })
+        if (streamGenerationRef.current !== generation) {
+          stream.dispose()
+          return
         }
-        if (frame.type === 'history_incomplete') {
-          setStatus('历史不完整：' + (frame.message || '回放被中断'))
-          setHistoryLoading(false)
-        }
-        if (frame.type === 'model_switched') {
-          if (frame.data?.model) setCurrentModel(frame.data.model)
-          setSwitchingModel(false)
-          setStatus('模型已切换')
-        }
-        if (frame.type === 'model_switch_failed') {
-          setSwitchingModel(false)
-          setError(frame.message || '模型切换被拒绝')
-          setStatus('模型切换失败')
-        }
-        if (frame.type === 'session_missing') {
-          setError(frame.message || '该会话在所选设备上已不存在。')
-          setStatus('设备上找不到该会话')
-          setHistoryLoading(false)
-        }
-        if (frame.type === 'request') {
-          setPendingRequests(current => [...current.filter(item => item.requestId !== frame.requestId), frame])
-        }
-        if (frame.type === 'notification' && frame.method === '_monkeyai/session/state') {
-          const status = frame.data?.state?.status
-          if (typeof status === 'string' && SESSION_STATUS_LABEL[status]) {
-            setSessionStatus(status)
-            setTurnActive(status === 'running')
-            if (status !== 'running') setStopping(false)
+        streamRef.current = stream
+        setStatus(retries > 0 ? '远程会话已重新连接' : '远程会话已连接')
+        for await (const frame of stream) {
+          setFrames(current => [...current, frame])
+          if (frame.type === 'ready' && !historyLoadedRef.current) setStatus('正在回放会话历史')
+          if (frame.type === 'reconnecting') setStatus(frame.message || '正在重连远程 runtime')
+          if (frame.type === 'history_loaded') {
+            historyLoadedRef.current = true
+            setStatus('历史已加载')
+            setHistoryLoading(false)
+            setSessionStatus(current => current || 'idle')
+            if (frame.model) setCurrentModel(frame.model)
           }
+          if (frame.type === 'history_incomplete') {
+            setStatus('历史不完整：' + (frame.message || '回放被中断'))
+            setHistoryLoading(false)
+          }
+          if (frame.type === 'model_switched') {
+            if (frame.data?.model) setCurrentModel(frame.data.model)
+            setSwitchingModel(false)
+            setStatus('模型已切换')
+          }
+          if (frame.type === 'model_switch_failed') {
+            setSwitchingModel(false)
+            setError(frame.message || '模型切换失败')
+            setStatus('模型切换失败')
+          }
+          if (frame.type === 'session_missing') {
+            setError(frame.message || '该会话在所选设备上已不存在。')
+            setStatus('设备上找不到该会话')
+            setHistoryLoading(false)
+          }
+          if (frame.type === 'request') {
+            setPendingRequests(current => [...current.filter(item => item.requestId !== frame.requestId), frame])
+          }
+          if (frame.type === 'notification' && frame.method === '_monkeyai/session/state') {
+            const status = frame.data?.state?.status
+            if (typeof status === 'string' && SESSION_STATUS_LABEL[status]) {
+              setSessionStatus(status)
+              setTurnActive(status === 'running')
+              if (status !== 'running') setStopping(false)
+            }
+          }
+          if (frame.type === 'delivery') {
+            const accepted = Boolean(frame.data?.accepted)
+            setLastDelivery({ accepted, code: frame.data?.code, frame: frame.type })
+            setTurnActive(false)
+            setStopping(false)
+            if (accepted) {
+              const cancelled = frame.data?.result?.stopReason === 'cancelled'
+              setStatus(cancelled ? '回合已停止' : '回合已完成')
+            } else {
+              setPrompt(current => current === '' ? (lastDraftRef.current || '') : current)
+              setStatus('MonkeyAI 未接受该指令，草稿已保留')
+              if (frame.message) setError(frame.message)
+            }
+          }
+          if (frame.type === 'cancel_sent') {
+            setStopping(false)
+            setStatus('已请求停止，等待 runtime 取消')
+          }
+          if (frame.type === 'response_sent') {
+            setPendingRequests(current => current.filter(item => item.requestId !== frame.requestId))
+          }
+          if (frame.type === 'response_error') {
+            setError(`远程回复被拒绝：${frame.code || '未知'}`)
+          }
+          if (frame.type === 'error') setError(frame.message || frame.code || '远程会话错误')
         }
-        if (frame.type === 'delivery') {
-          const accepted = Boolean(frame.data?.accepted)
-          setLastDelivery({ accepted, code: frame.data?.code, frame: frame.type })
+        if (streamGenerationRef.current !== generation || streamRef.current !== stream) return
+        streamRef.current = null
+        setStatus('远程会话已断开')
+        setHistoryLoading(false)
+        setTurnActive(false)
+        setStopping(false)
+        return
+      } catch (reason) {
+        if (streamGenerationRef.current !== generation || (stream && streamRef.current !== stream)) return
+        if (isRemoteStreamCarrierError(reason)) {
+          retries += 1
+          try { stream?.dispose() } catch {}
+          streamRef.current = null
+          setError('')
           setTurnActive(false)
           setStopping(false)
-          if (accepted) {
-            const cancelled = frame.data?.result?.stopReason === 'cancelled'
-            setStatus(cancelled ? '回合已停止' : '回合已完成')
-          } else {
-            setPrompt(current => current === '' ? (lastDraftRef.current || '') : current)
-            setStatus('MonkeyAI 未接受该指令，草稿已保留')
-            if (frame.message) setError(frame.message)
-          }
+          setStatus('远程连接中断，正在重连')
+          const delay = Math.min(1000 * (2 ** Math.min(retries - 1, 5)), 30_000)
+          await new Promise(resolve => setTimeout(resolve, delay))
+          continue
         }
-        if (frame.type === 'cancel_sent') {
-          setStopping(false)
-          setStatus('已请求停止，等待 runtime 取消')
-        }
-        if (frame.type === 'response_sent') {
-          setPendingRequests(current => current.filter(item => item.requestId !== frame.requestId))
-        }
-        if (frame.type === 'response_error') {
-          setError(`远程回复被拒绝：${frame.code || '未知'}`)
-        }
-        if (frame.type === 'error') setError(frame.message || frame.code || '远程会话错误')
+        streamRef.current = null
+        setStatus('远程会话不可用')
+        setError(errorText(reason))
+        setHistoryLoading(false)
+        setTurnActive(false)
+        setStopping(false)
+        return
       }
-      if (streamRef.current !== stream) return
-      setStatus('远程会话已断开')
-      setHistoryLoading(false)
-      setTurnActive(false)
-      setStopping(false)
-    } catch (reason) {
-      if (stream && streamRef.current !== stream) return
-      setStatus('远程会话不可用')
-      setError(errorText(reason))
-      setHistoryLoading(false)
-      setTurnActive(false)
-      setStopping(false)
     }
   }
 
@@ -1028,7 +1076,7 @@ function RemoteSessionPage({ api }) {
       h('div', { style: style.row },
         h('button', {
           type: 'button', style: { ...style.button, flexShrink: 0 }, title: '关闭会话并返回列表',
-          onClick: () => { streamRef.current?.dispose(); streamRef.current = null; setSessionId(''); setTurnActive(false); setStopping(false); setSessionStatus(''); setStatus('远程会话已关闭') },
+          onClick: () => { streamGenerationRef.current += 1; streamRef.current?.dispose(); streamRef.current = null; setSessionId(''); setTurnActive(false); setStopping(false); setSessionStatus(''); setStatus('远程会话已关闭') },
         }, '←'),
         h('strong', { style: { flex: 1, fontSize: 13.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, title }, title),
         sessionStatus ? h('span', {
@@ -1038,7 +1086,7 @@ function RemoteSessionPage({ api }) {
             borderColor: sessionStatus === 'running' ? t.accent : sessionStatus === 'error' ? t.dangerBorder : t.border,
             color: sessionStatus === 'running' ? t.accent : sessionStatus === 'error' ? t.danger : t.text2,
           },
-          title: '会话状态（含远端客户端发起的回合）',
+          title: '会话状态',
           'aria-label': `会话状态：${SESSION_STATUS_LABEL[sessionStatus]}`,
         },
           sessionStatus === 'running' ? h('span', { className: 'mai-pulse', style: { ...style.dot, background: t.accent } }) : null,
@@ -1160,7 +1208,7 @@ function RemoteSessionPage({ api }) {
                 h('path', { d: 'M8 12.5V3.5M8 3.5L4 7.5M8 3.5L12 7.5', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' })))),
       lastDelivery || turnActive ? h('div', { style: { fontSize: 11.5, color: turnActive ? t.accent : lastDelivery?.accepted ? t.success : lastDelivery?.frame === 'pending' ? t.text3 : t.danger, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 } },
         turnActive ? h('span', { className: 'mai-pulse', style: { ...style.dot, background: t.accent } }) : null,
-        turnActive ? (stopping ? '正在停止当前回合…' : sessionStatus === 'running' ? 'MonkeyAI 正在处理（远端客户端发起）…' : 'MonkeyAI 正在处理…') : lastDelivery?.accepted ? '回合已结束' : lastDelivery?.frame === 'pending' ? '等待投递' : '投递被拒绝') : null)
+        turnActive ? (stopping ? '正在停止当前回合…' : 'MonkeyAI 正在处理…') : lastDelivery?.accepted ? '回合已结束' : lastDelivery?.frame === 'pending' ? '等待投递' : '投递被拒绝') : null)
       : null)
 }
 
