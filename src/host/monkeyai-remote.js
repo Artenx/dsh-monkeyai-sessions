@@ -974,11 +974,14 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
         }
         // The desktop client tracks turn state via _monkeyai/session/state
         // notifications. Seed the panel with the current status so a turn
-        // already running when the panel opens is shown as 进行中.
+        // already running when the panel opens is shown as 进行中. The state
+        // read omits state.status on some runtime builds, so fall back to the
+        // session.status field returned by the history read channel.
+        const KNOWN_STATUSES = ['running', 'idle', 'error', 'interrupted']
         try {
           const state = await readSessionState({ httpBase: ticketHttpBase, ticket: ticketValue, sessionId: selectedSession, signal })
           const status = state?.state?.status
-          if (typeof status === 'string' && ['running', 'idle', 'error', 'interrupted'].includes(status)) {
+          if (typeof status === 'string' && KNOWN_STATUSES.includes(status)) {
             emit({
               type: 'notification',
               sessionId: selectedSession,
@@ -989,6 +992,21 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
         } catch {
           // Older runtimes may not expose the state read; live notifications
           // still drive the status once the next turn starts.
+        }
+        try {
+          const latest = await readSessionHistoryPage({ httpBase: ticketHttpBase, ticket: ticketValue, sessionId: selectedSession, limit: 1, signal })
+          const status = latest.session?.status
+          if (typeof status === 'string' && KNOWN_STATUSES.includes(status)) {
+            emit({
+              type: 'notification',
+              sessionId: selectedSession,
+              method: '_monkeyai/session/state',
+              data: { sessionId: selectedSession, state: { status } },
+            })
+          }
+        } catch {
+          // The history channel may be unavailable; live notifications remain
+          // the source of truth for subsequent turns.
         }
       } catch (error) {
         if (signal?.aborted) throw error

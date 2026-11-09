@@ -185,11 +185,13 @@ function installAcpAgent() {
     if (target.endsWith('/read/session')) {
       const body = JSON.parse(init.body)
       if (body.method === '_monkeyai/session/state/get') {
+        // Some runtime builds (e.g. the 193 server) omit state.status from the
+        // state snapshot; the panel must fall back to the history channel.
         return jsonResponse({
           result: {
             sessionId: 'history-session',
             eventSeq: 12,
-            state: { status: 'running', files: [], tasks: [], plan: [], resourceIds: [], resourcePreferences: {} },
+            state: { files: [], tasks: [], plan: [], resourceIds: [], resourcePreferences: {} },
           },
         })
       }
@@ -202,7 +204,8 @@ function installAcpAgent() {
         return jsonResponse({
           result: {
             eventSeq: 11,
-            session: { id: 'history-session', configurationRevision: FakeWebSocket.configurationRevision },
+            // Mimic the 193 runtime: the session carries its turn status here.
+            session: { id: 'history-session', configurationRevision: FakeWebSocket.configurationRevision, status: 'running' },
             messages: [
               { id: 'n2', role: 'assistant', parts: [{ type: 'text', text: 'newer answer from http history' }] },
               refreshedMessage,
@@ -292,9 +295,12 @@ test('followSession streams history and live notifications for the selected sess
 
     // Full history arrives over the HTTP read channel before the ACP replay;
     // the replayed m1 chunk is suppressed as a duplicate of the HTTP snapshot.
-    assert.equal(FakeWebSocket.readSessionRequests.length, 3)
+    // The fourth read is the limit:1 status probe seeded from session.status
+    // (the state/get snapshot carries no status on this runtime).
+    assert.equal(FakeWebSocket.readSessionRequests.length, 4)
     assert.equal(FakeWebSocket.readSessionRequests[0].method, '_monkeyai/session/messages')
     assert.equal(FakeWebSocket.readSessionRequests[1].params.cursor, 'cursor-page-1')
+    assert.equal(FakeWebSocket.readSessionRequests[3].params.limit, 1)
     assert.ok(frames.some(frame => frame.type === 'notification'
       && frame.data?.update?.content?.text === 'older question from http history'))
     assert.ok(frames.some(frame => frame.type === 'notification'
