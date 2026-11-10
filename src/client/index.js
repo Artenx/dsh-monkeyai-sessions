@@ -72,6 +72,17 @@ const style = {
   textarea: { width: '100%', minHeight: 56, maxHeight: 200, boxSizing: 'border-box', padding: '8px 11px', borderRadius: t.radius, border: `1px solid ${t.border2}`, background: t.surface, color: t.text, resize: 'vertical', outline: 'none', fontSize: 13, lineHeight: 1.5, transition: 'border-color .15s, box-shadow .15s' },
   details: { fontSize: 12, color: t.text2 },
   summary: { cursor: 'pointer', userSelect: 'none', fontSize: 12, color: t.text2 },
+  modelPicker: { position: 'relative', flex: '0 1 200px', minWidth: 132, maxWidth: '100%' },
+  modelPickerSummary: { display: 'flex', alignItems: 'center', gap: 6, width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: t.radius, border: `1px solid ${t.border2}`, background: t.surface, color: t.text, outline: 'none', fontSize: 13, cursor: 'pointer', listStyle: 'none', userSelect: 'none' },
+  modelPickerCaret: { flexShrink: 0, color: t.text3, fontSize: 9 },
+  modelMenu: { position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 40, width: 'max(100%, 264px)', maxWidth: '94vw', boxSizing: 'border-box', display: 'grid', gap: 6, padding: 8, borderRadius: 10, border: `1px solid ${t.border}`, background: t.surface, boxShadow: '0 10px 30px rgba(16,24,40,0.16)' },
+  modelMenuList: { display: 'grid', gap: 2, maxHeight: '52vh', overflowY: 'auto', overscrollBehavior: 'contain' },
+  modelItem: { display: 'flex', alignItems: 'baseline', gap: 8, width: '100%', boxSizing: 'border-box', padding: '7px 9px', borderRadius: 7, border: '1px solid transparent', background: 'transparent', color: t.text, cursor: 'pointer', fontSize: 12.5, textAlign: 'left', transition: 'background .12s' },
+  modelItemActive: { background: t.accentSoft, borderColor: t.border, fontWeight: 650 },
+  modelItemName: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' },
+  modelItemMeta: { flexShrink: 0, fontSize: 11, color: t.text3 },
+  modelSearch: { width: '100%', boxSizing: 'border-box', padding: '6px 9px', borderRadius: t.radius, border: `1px solid ${t.border2}`, background: t.surface, color: t.text, outline: 'none', fontSize: 12.5 },
+  modelEmpty: { fontSize: 12, color: t.text3, textAlign: 'center', padding: '10px 0' },
 }
 
 const PANEL_CSS = `
@@ -89,6 +100,10 @@ const PANEL_CSS = `
 .mai-panel .mai-card-hover { transition: border-color .15s, background .15s; }
 .mai-panel .mai-card-hover:not(:disabled):hover { border-color: #b9cdf3 !important; background: #f7faff !important; }
 .mai-panel .mai-toolbar { position: relative; }
+.mai-panel .mai-model-picker > summary::-webkit-details-marker { display: none; }
+.mai-panel .mai-model-picker > summary::before { content: none; }
+.mai-panel .mai-model-picker-menu { max-height: 52vh; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.mai-panel .mai-model-picker[open] .mai-model-picker-caret { transform: rotate(180deg); }
 .mai-panel .mai-workspace { display: grid; grid-template-columns: minmax(248px, 292px) minmax(0, 1fr); gap: 12px; min-width: 0; align-items: stretch; }
 .mai-panel .mai-session-sidebar { min-height: min(70vh, 720px); }
 .mai-panel .mai-session-list { scrollbar-gutter: stable; }
@@ -110,6 +125,9 @@ const PANEL_CSS = `
   .mai-panel .mai-page-title { font-size: 16px !important; }
   .mai-panel .mai-toolbar-controls { align-items: stretch; }
   .mai-panel .mai-toolbar-controls select { flex-basis: 100% !important; }
+  .mai-panel .mai-model-picker { flex: 1 1 100% !important; min-width: 0 !important; }
+  .mai-panel .mai-model-menu { position: fixed !important; inset: 50% 12px auto !important; transform: translateY(-50%); width: auto !important; max-width: none !important; max-height: 70vh !important; }
+  .mai-panel .mai-model-picker-menu { max-height: calc(70vh - 80px) !important; }
   .mai-panel .mai-session-list { grid-template-columns: 1fr !important; max-height: 210px; }
   .mai-panel .mai-thread { height: 68vh; min-height: 360px; padding: 10px; }
   .mai-panel .mai-thread-header { gap: 6px !important; }
@@ -141,6 +159,7 @@ function withTimeout(promise, timeoutMs, label) {
 
 function isRemoteStreamCarrierError(error) {
   return /api gateway: remote stream websocket (?:failed|closed)/i.test(errorText(error))
+    || /remote stream socket closed/i.test(errorText(error))
 }
 
 // Lightweight inline markdown: fenced code blocks, `code`, **bold**,
@@ -342,6 +361,7 @@ function RemoteSessionPage({ api }) {
   const [sessionStatus, setSessionStatus] = useState('')
   const [signInEmail, setSignInEmail] = useState('')
   const [signInPassword, setSignInPassword] = useState('')
+  const [modelFilter, setModelFilter] = useState('')
   const streamRef = useRef(null)
   const historyLoadedRef = useRef(false)
   const lastDraftRef = useRef('')
@@ -349,6 +369,17 @@ function RemoteSessionPage({ api }) {
   const eventsRef = useRef(null)
   const prevScrollHeightRef = useRef(null)
   const streamGenerationRef = useRef(0)
+  const modelPickerRef = useRef(null)
+
+  useEffect(() => {
+    if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return undefined
+    const onDocClick = event => {
+      const picker = modelPickerRef.current
+      if (picker && picker.open && picker.contains && !picker.contains(event.target)) picker.removeAttribute('open')
+    }
+    document.addEventListener('click', onDocClick)
+    return () => document.removeEventListener('click', onDocClick)
+  }, [])
   const title = useMemo(() => {
     const runtime = runtimeSessions.find(item => item.id === sessionId)
     const summary = summarySessions.find(item => item.id === sessionId)
@@ -605,6 +636,7 @@ function RemoteSessionPage({ api }) {
     setError('')
     setAnswerText('')
     setCurrentModel('')
+    setModelFilter('')
     setVisibleCount(RECENT_LIMIT)
     setHistoryLoading(true)
     setStatus('正在连接远程会话')
@@ -628,7 +660,7 @@ function RemoteSessionPage({ api }) {
             setStatus('历史已加载')
             setHistoryLoading(false)
             setSessionStatus(current => current || 'idle')
-            if (frame.model) setCurrentModel(frame.model)
+            if (frame.data?.model) setCurrentModel(frame.data.model)
           }
           if (frame.type === 'history_incomplete') {
             setStatus('历史不完整：' + (frame.message || '回放被中断'))
@@ -651,6 +683,9 @@ function RemoteSessionPage({ api }) {
           }
           if (frame.type === 'request') {
             setPendingRequests(current => [...current.filter(item => item.requestId !== frame.requestId), frame])
+          }
+          if (frame.type === 'notification' && frame.method === '_monkeyai/session/model') {
+            if (typeof frame.data?.model === 'string' && frame.data.model !== '') setCurrentModel(frame.data.model)
           }
           if (frame.type === 'notification' && frame.method === '_monkeyai/session/state') {
             const status = frame.data?.state?.status
@@ -1141,20 +1176,55 @@ function RemoteSessionPage({ api }) {
         },
           sessionStatus === 'running' ? h('span', { className: 'mai-pulse', style: { ...style.dot, background: t.accent } }) : null,
           SESSION_STATUS_LABEL[sessionStatus]) : null,
-        h('select', {
-          style: { ...style.input, flex: '0 1 190px', minWidth: 130 },
-          value: currentModel,
-          disabled: !hasControl || switchingModel || models.length === 0,
-          title: '切换该会话的模型',
-          onChange: event => {
-            const next = event.target.value
-            if (next && next !== currentModel) switchSessionModel(next)
+        (() => {
+          const modelPickerDisabled = !hasControl || switchingModel || models.length === 0
+          const currentModelInfo = models.find(m => m.id === currentModel)
+          const currentModelUnknown = Boolean(currentModel && !currentModelInfo)
+          const needle = modelFilter.trim().toLowerCase()
+          const filteredModels = needle === ''
+            ? models
+            : models.filter(m => `${m.displayName} ${m.model ?? ''} ${m.id}`.toLowerCase().includes(needle))
+          return h('details', {
+            className: 'mai-model-picker',
+            style: { ...style.modelPicker, ...(modelPickerDisabled ? { opacity: 0.5, pointerEvents: 'none' } : {}) },
+            ref: modelPickerRef,
           },
-        },
-          currentModel && !models.some(m => m.id === currentModel)
-            ? h('option', { value: currentModel }, currentModel.slice(0, 24))
-            : null,
-          models.map(m => h('option', { key: m.id, value: m.id }, `${m.displayName} (${Math.round(m.contextWindowTokens / 1000)}k)`)))),
+          h('summary', { style: style.modelPickerSummary, title: '切换该会话的模型' },
+            h('span', { className: 'mai-model-picker-caret', style: { ...style.modelPickerCaret, flexShrink: 0 } }, '▾'),
+            h('span', { style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' } },
+              currentModelInfo
+                ? `${currentModelInfo.displayName} (${Math.round(currentModelInfo.contextWindowTokens / 1000)}k)`
+                : currentModel ? currentModel.slice(0, 24) : '会话模型')),
+          h('div', { className: 'mai-model-menu', style: style.modelMenu },
+            models.length > 6 ? h('input', {
+              type: 'search', placeholder: '搜索模型…', 'aria-label': '搜索模型', value: modelFilter,
+              style: style.modelSearch,
+              onChange: event => setModelFilter(event.target.value),
+            }) : null,
+            h('div', { className: 'mai-model-picker-menu', style: style.modelMenuList },
+              currentModelUnknown && (needle === '' || currentModel.toLowerCase().includes(needle))
+                ? h('button', {
+                  type: 'button', disabled: true, 'aria-pressed': true,
+                  style: { ...style.modelItem, ...style.modelItemActive },
+                },
+                  h('span', { style: style.modelItemName }, currentModel.slice(0, 24)),
+                  h('span', { style: style.modelItemMeta }, '当前模型'))
+                : null,
+              filteredModels.length === 0 ? h('div', { style: style.modelEmpty }, '没有匹配的模型') : null,
+              filteredModels.map(m => h('button', {
+                key: m.id, type: 'button',
+                'aria-pressed': m.id === currentModel,
+                style: { ...style.modelItem, ...(m.id === currentModel ? style.modelItemActive : {}) },
+                disabled: !hasControl || switchingModel,
+                title: m.model && m.model !== m.displayName ? m.model : undefined,
+                onClick: () => {
+                  if (m.id !== currentModel) switchSessionModel(m.id)
+                  modelPickerRef.current?.removeAttribute('open')
+                },
+              },
+                h('span', { style: style.modelItemName }, m.displayName),
+                h('span', { style: style.modelItemMeta }, `${Math.round(m.contextWindowTokens / 1000)}k`))))))
+        })()),
       h('div', { style: style.events, className: 'mai-thread-events mai-events', 'aria-live': 'polite', 'data-events': '', ref: eventsRef,
           onScroll: event => {
             const el = event.currentTarget

@@ -197,15 +197,17 @@ function installAcpAgent() {
       }
       FakeWebSocket.readSessionRequests.push(body)
       FakeWebSocket.historyReadCount += 1
-      if (FakeWebSocket.historyReadCount > 2) {
-        const refreshedMessage = FakeWebSocket.historyReadCount === 3
+      // Reads 1-3 are the model probe and the two full-history pages; reads
+      // 4+ are the post-mount catch-up and later refreshes.
+      if (FakeWebSocket.historyReadCount > 3) {
+        const refreshedMessage = FakeWebSocket.historyReadCount === 4
           ? { id: 'm-catchup', role: 'assistant', parts: [{ type: 'text', text: 'turn from history catch-up' }] }
           : { id: 'm-refresh', role: 'assistant', parts: [{ type: 'text', text: 'complete large reply from history refresh' }] }
         return jsonResponse({
           result: {
             eventSeq: 11,
             // Mimic the 193 runtime: the session carries its turn status here.
-            session: { id: 'history-session', configurationRevision: FakeWebSocket.configurationRevision, status: 'running' },
+            session: { id: 'history-session', configurationRevision: FakeWebSocket.configurationRevision, status: 'running', model: 'model-current' },
             messages: [
               { id: 'n2', role: 'assistant', parts: [{ type: 'text', text: 'newer answer from http history' }] },
               refreshedMessage,
@@ -219,7 +221,7 @@ function installAcpAgent() {
       if (body.params?.cursor === 'cursor-page-1') {
         return jsonResponse({
           result: {
-            session: { id: 'history-session', configurationRevision: FakeWebSocket.configurationRevision },
+            session: { id: 'history-session', configurationRevision: FakeWebSocket.configurationRevision, model: 'model-current' },
             messages: [
               { id: 'm0', role: 'user', parts: [{ type: 'text', text: 'older question from http history' }] },
               { id: 'm1', role: 'assistant', parts: [{ type: 'tool_call', toolCallId: 'tool-http-1' }, { type: 'text', text: 'hello from history' }] },
@@ -233,7 +235,7 @@ function installAcpAgent() {
       return jsonResponse({
         result: {
           eventSeq: 10,
-          session: { id: 'history-session', configurationRevision: FakeWebSocket.configurationRevision },
+          session: { id: 'history-session', configurationRevision: FakeWebSocket.configurationRevision, model: 'model-current' },
           messages: [
             { id: 'n1', role: 'user', parts: [{ type: 'text', text: 'newer question from http history' }] },
             { id: 'n2', role: 'assistant', parts: [{ type: 'text', text: 'newer answer from http history' }] },
@@ -295,12 +297,14 @@ test('followSession streams history and live notifications for the selected sess
 
     // Full history arrives over the HTTP read channel before the ACP replay;
     // the replayed m1 chunk is suppressed as a duplicate of the HTTP snapshot.
-    // The fourth read is the limit:1 status probe seeded from session.status
-    // (the state/get snapshot carries no status on this runtime).
-    assert.equal(FakeWebSocket.readSessionRequests.length, 4)
+    // Reads in order: (1) limit:1 model probe, (2-3) full-history pages,
+    // (4) post-mount catch-up, (5) limit:1 status probe seeded from
+    // session.status (the state/get snapshot carries no status on this
+    // runtime).
+    assert.equal(FakeWebSocket.readSessionRequests.length, 5)
     assert.equal(FakeWebSocket.readSessionRequests[0].method, '_monkeyai/session/messages')
-    assert.equal(FakeWebSocket.readSessionRequests[1].params.cursor, 'cursor-page-1')
-    assert.equal(FakeWebSocket.readSessionRequests[3].params.limit, 1)
+    assert.equal(FakeWebSocket.readSessionRequests[2].params.cursor, 'cursor-page-1')
+    assert.equal(FakeWebSocket.readSessionRequests[4].params.limit, 1)
     assert.ok(frames.some(frame => frame.type === 'notification'
       && frame.data?.update?.content?.text === 'older question from http history'))
     assert.ok(frames.some(frame => frame.type === 'notification'
@@ -321,6 +325,19 @@ test('followSession streams history and live notifications for the selected sess
     assert.equal(frames.filter(frame => frame.type === 'notification'
       && frame.data?.update?.content?.text === 'hello from history').length, 1)
     assert.equal(frames.filter(frame => frame.type === 'history_loaded').length, 1)
+    // The model picker must preselect the session's current model: the
+    // history channel's session object is the only source that carries it,
+    // and the value must ride inside `data` (top-level extras are stripped).
+    const historyLoadedFrame = frames.find(frame => frame.type === 'history_loaded')
+    assert.equal(historyLoadedFrame.data?.model, 'model-current')
+    // The model also syncs early via a dedicated notification, before the
+    // full history walk completes.
+    assert.equal(frames[0]?.type, 'notification')
+    assert.equal(frames[0]?.method, '_monkeyai/session/model')
+    assert.equal(frames[0]?.data?.model, 'model-current')
+    assert.ok(frames.some(frame => frame.type === 'notification'
+      && frame.method === '_monkeyai/session/model'
+      && frame.data?.model === 'model-current'), 'early model notification')
 
     // If the panel opens mid-turn, the HTTP snapshot may already contain a
     // partial message. Non-replay chunks with that same message id must still

@@ -61,7 +61,7 @@ From a checkout:
 npm install
 npm run build
 npm pack
-dsh plugin --profile web add ./dsh-monkeyai-sessions-0.1.13.tgz
+dsh plugin --profile web add ./dsh-monkeyai-sessions-0.1.14.tgz
 ```
 
 Verified against a real DSH `0.2.2-rc.1` web profile and a live MonkeyAI runtime: authorization, full history loading, prompt delivery, model switching, and turn cancellation all work end to end.

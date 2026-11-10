@@ -739,7 +739,9 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
     const emitHistoryLoaded = model => {
       if (historyLoadedEmitted) return
       historyLoadedEmitted = true
-      emit({ type: 'history_loaded', sessionId: selectedSession, ...(model === undefined ? {} : { model }) })
+      // model travels inside data: the RemoteFrame schema only passes through
+      // declared top-level fields, so a bare `model` key would be stripped.
+      emit({ type: 'history_loaded', sessionId: selectedSession, ...(model === undefined ? {} : { data: { model } }) })
     }
     const refreshPersistedHistory = async changedMessageId => {
       if (!ticketHttpBase || !ticketValue) return
@@ -1055,6 +1057,21 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
       ticketHttpBase = ticket.httpBase
       if (signal.aborted) throw signal.reason ?? new Error('远程会话已取消')
 
+      // Surface the session's current model as early as possible. Large
+      // histories paginate slowly and the stream carrier can drop mid-walk;
+      // a one-message read already carries session.model, so the model picker
+      // syncs before (and independently of) the history walk.
+      try {
+        const probeTimeout = AbortSignal.any([AbortSignal.timeout(20_000), ...(signal ? [signal] : [])])
+        const modelProbe = await readSessionHistoryPage({ httpBase: ticket.httpBase, ticket: ticketValue, sessionId: selectedSession, limit: 1, signal: probeTimeout })
+        if (typeof modelProbe.session?.model === 'string' && modelProbe.session.model !== '') {
+          yield { type: 'notification', sessionId: selectedSession, method: '_monkeyai/session/model', data: { model: modelProbe.session.model } }
+        }
+      } catch {
+        // Best-effort: history_loaded still carries the model when its walk
+        // completes, and the picker shows the placeholder meanwhile.
+      }
+
       // Load the full history over the runtime's HTTP read channel before the
       // ACP connection starts. The ACP session/load replay only streams a
       // small recent window and the socket is closed mid-replay; the HTTP
@@ -1071,7 +1088,10 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
         if (history.count > 0) {
           httpHistoryComplete = true
           httpConfigurationRevision = history.configurationRevision
-          emitHistoryLoaded()
+          // The runtime's session/load response omits the current model; the
+          // history channel's session object carries it, so surface it with
+          // history_loaded to preselect the right entry in the model picker.
+          emitHistoryLoaded(history.sessionModel)
         }
       } catch (historyError) {
         if (signal?.aborted) throw historyError
@@ -1518,11 +1538,15 @@ async function fetchFullSessionHistory({ httpBase, ticket, sessionId, signal, on
   const toolCallsById = {}
   let cursor
   let configurationRevision
+  let sessionModel
   for (let page = 0; page < maxPages; page++) {
     const timeout = AbortSignal.any([AbortSignal.timeout(30_000), ...(signal ? [signal] : [])])
     const result = await readSessionHistoryPage({ httpBase, ticket, sessionId, cursor, direction: 'older', signal: timeout })
     if (Number.isSafeInteger(result.session?.configurationRevision)) {
       configurationRevision = result.session.configurationRevision
+    }
+    if (typeof result.session?.model === 'string' && result.session.model !== '') {
+      sessionModel = result.session.model
     }
     const pageMessages = []
     for (const message of Array.isArray(result.messages) ? result.messages : []) {
@@ -1540,7 +1564,7 @@ async function fetchFullSessionHistory({ httpBase, ticket, sessionId, signal, on
       for (const frame of historyMessageToFrames(sessionId, message, toolCallsById)) await onFrame(frame)
     }
   }
-  return { messageIds: [...seenIds], count: seenIds.size, configurationRevision }
+  return { messageIds: [...seenIds], count: seenIds.size, configurationRevision, sessionModel }
 }
 
 // Refresh only the newest pages after a _monkeyai/session/history_changed
