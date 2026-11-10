@@ -1075,15 +1075,19 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
       // Load the full history over the runtime's HTTP read channel before the
       // ACP connection starts. The ACP session/load replay only streams a
       // small recent window and the socket is closed mid-replay; the HTTP
-      // endpoint paginates the complete message log by cursor instead.
+      // endpoint paginates the complete message log by cursor instead. Yield
+      // the completed history before ACP session/load so a slow runtime mount
+      // cannot keep the panel's history spinner active.
       try {
+        const historyFrames = []
         const history = await fetchFullSessionHistory({
           httpBase: ticket.httpBase,
           ticket: ticketValue,
           sessionId: selectedSession,
           signal,
-          onFrame: async frame => { await emit(frame) },
+          onFrame: frame => { historyFrames.push(frame) },
         })
+        for (const frame of historyFrames) yield frame
         for (const id of history.messageIds) httpHistoryMessageIds.add(id)
         if (history.count > 0) {
           httpHistoryComplete = true
@@ -1091,7 +1095,12 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
           // The runtime's session/load response omits the current model; the
           // history channel's session object carries it, so surface it with
           // history_loaded to preselect the right entry in the model picker.
-          emitHistoryLoaded(history.sessionModel)
+          historyLoadedEmitted = true
+          yield {
+            type: 'history_loaded',
+            sessionId: selectedSession,
+            ...(history.sessionModel === undefined ? {} : { data: { model: history.sessionModel } }),
+          }
         }
       } catch (historyError) {
         if (signal?.aborted) throw historyError

@@ -284,6 +284,9 @@ test('followSession streams history and live notifications for the selected sess
     const consuming = collect(stream, frames, controller.signal)
 
     await waitFor(() => frames.some(frame => frame.type === 'history_loaded'), 'history_loaded')
+    // The HTTP history is yielded before ACP mount so the panel can render it
+    // while session/load is still initializing.
+    await waitFor(() => FakeWebSocket.instances[0]?.sent.some(message => message.method === 'session/load'), 'session/load request')
     const initCapabilities = FakeWebSocket.initializeParams[0]?.clientCapabilities?._meta
     assert.equal(initCapabilities?.historyHTTP, true)
     assert.equal(initCapabilities?.historyRefresh, true)
@@ -423,6 +426,7 @@ test('followSession reconnects after a post-load drop, then ends when the budget
     )
     const consuming = collect(stream, frames, controller.signal)
     await waitFor(() => frames.some(frame => frame.type === 'history_loaded'), 'history_loaded')
+    await waitFor(() => FakeWebSocket.instances.some(socket => socket.loadedSession), 'mounted ACP session')
 
     // First post-load drop reconnects without replaying history.
     FakeWebSocket.instances.at(-1).close()
@@ -588,6 +592,8 @@ test('followSession retries a model switch when another client advanced the conf
     )
     const consuming = collect(stream, frames, controller.signal)
     await waitFor(() => frames.some(frame => frame.type === 'history_loaded'), 'history_loaded')
+    await waitFor(() => frames.some(frame => frame.type === 'notification'
+      && frame.method === '_monkeyai/session/state'), 'ACP setup complete')
 
     // Another client edits the session after the panel read its revision.
     FakeWebSocket.configurationRevision += 3
