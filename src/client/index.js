@@ -40,7 +40,7 @@ const style = {
   sessionSidebar: { display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto', gap: 10, minWidth: 0, padding: 12, border: `1px solid ${t.border}`, borderRadius: 12, background: t.surface, boxShadow: '0 2px 8px rgba(16,24,40,0.035)' },
   sessionList: { display: 'grid', gridTemplateColumns: '1fr', alignContent: 'start', gap: 6, minHeight: 0, overflowY: 'auto', padding: '1px 3px 2px 1px' },
   thread: { display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto', gap: 10, minWidth: 0, height: 'min(70vh, 720px)', minHeight: 440, overflow: 'hidden', padding: 12 },
-  emptyThread: { display: 'grid', placeContent: 'center', justifyItems: 'center', gap: 9, minWidth: 0, minHeight: 'min(70vh, 720px)', padding: 28, border: `1px dashed ${t.border2}`, borderRadius: 12, background: 'linear-gradient(145deg, #ffffff 0%, #f8faff 100%)', textAlign: 'center' },
+  emptyThread: { display: 'grid', placeContent: 'center', justifyItems: 'center', gap: 9, minWidth: 0, padding: 28, border: `1px dashed ${t.border2}`, borderRadius: 12, background: 'linear-gradient(145deg, #ffffff 0%, #f8faff 100%)', textAlign: 'center' },
   row: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   label: { display: 'grid', gap: 4, flex: 1, minWidth: 180, fontSize: 12, fontWeight: 600, color: t.text2 },
   input: { width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: t.radius, border: `1px solid ${t.border2}`, background: t.surface, color: t.text, outline: 'none', fontSize: 13, transition: 'border-color .15s, box-shadow .15s' },
@@ -1118,7 +1118,7 @@ function RemoteSessionPage({ api }) {
                 h('span', { style: style.sessionMeta, className: 'mai-session-meta' }, session.cwd || '加载历史需要 runtime 提供工作目录'),
                 flag !== '' ? h('span', { style: { fontSize: 10.5, fontWeight: 650, color: session.stale ? t.text3 : '#8a6d1d', textTransform: 'uppercase', letterSpacing: '0.04em' } }, flag) : null)
             }))
-          : h('div', { style: { display: 'grid', justifyItems: 'center', gap: 7, padding: '22px 12px', textAlign: 'center' } },
+          : h('div', { style: { display: 'grid', alignContent: 'center', justifyItems: 'center', gap: 7, padding: '22px 12px', textAlign: 'center' } },
               h('span', { style: { ...style.avatar, width: 34, height: 34, background: t.surfaceAlt, color: t.text3, fontSize: 17 } }, '·'),
               h('span', { style: { fontSize: 12, fontWeight: 600, color: t.text2 } }, machineId ? '这里还没有会话' : '请选择远程设备'),
               h('span', { style: { fontSize: 11, color: t.text3 } }, machineId ? '刷新会话或创建一个新会话' : '会话列表会显示在这里')),
