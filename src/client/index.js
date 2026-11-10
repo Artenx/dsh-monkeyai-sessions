@@ -38,7 +38,7 @@ const style = {
   toolbarCard: { display: 'grid', gap: 10, padding: '13px 15px', border: `1px solid ${t.border}`, borderRadius: 12, background: t.surface, backgroundImage: 'linear-gradient(90deg, #3568e8 0%, #8baaf4 46%, #e7edfc 100%)', backgroundSize: '100% 3px', backgroundPosition: '0 0', backgroundRepeat: 'no-repeat', boxShadow: '0 2px 8px rgba(16,24,40,0.035)' },
   workspace: { display: 'grid', gridTemplateColumns: 'minmax(248px, 292px) minmax(0, 1fr)', gap: 12, minWidth: 0, alignItems: 'stretch' },
   sessionSidebar: { display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto', gap: 10, minWidth: 0, padding: 12, border: `1px solid ${t.border}`, borderRadius: 12, background: t.surface, boxShadow: '0 2px 8px rgba(16,24,40,0.035)' },
-  sessionList: { display: 'grid', gridTemplateColumns: '1fr', alignContent: 'start', gap: 6, minHeight: 0, overflowY: 'auto', padding: '1px 3px 2px 1px' },
+  sessionList: { display: 'grid', alignContent: 'start', gap: 6, minHeight: 0, overflowY: 'auto', padding: '1px 3px 2px 1px' },
   thread: { display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto', gap: 10, minWidth: 0, height: 'min(70vh, 720px)', minHeight: 440, padding: 12 },
   emptyThread: { display: 'grid', placeContent: 'center', justifyItems: 'center', gap: 9, minWidth: 0, padding: 28, border: `1px dashed ${t.border2}`, borderRadius: 12, background: 'linear-gradient(145deg, #ffffff 0%, #f8faff 100%)', textAlign: 'center' },
   row: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
@@ -53,7 +53,6 @@ const style = {
   statusBadge: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 10px', borderRadius: 999, fontSize: 11.5, fontWeight: 600, background: t.surfaceAlt, border: `1px solid ${t.border}`, color: t.text2, whiteSpace: 'nowrap', maxWidth: 340, overflow: 'hidden', textOverflow: 'ellipsis' },
   dot: { width: 7, height: 7, borderRadius: '50%', flexShrink: 0 },
   error: { display: 'flex', gap: 8, alignItems: 'flex-start', color: t.danger, margin: 0, fontSize: 12.5, background: t.dangerBg, border: `1px solid ${t.dangerBorder}`, borderRadius: t.radius, padding: '8px 10px', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' },
-  sessions: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 8 },
   session: { display: 'grid', gap: 4, textAlign: 'left', padding: '10px 12px', borderRadius: t.radius, border: `1px solid ${t.border}`, background: t.surface, color: t.text, cursor: 'pointer', transition: 'border-color .15s, background .15s' },
   selected: { border: `1px solid ${t.accent}`, background: t.accentSoft, boxShadow: `0 0 0 1px ${t.accent} inset` },
   sessionTitle: { fontSize: 13, fontWeight: 650, lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
@@ -1101,7 +1100,7 @@ function RemoteSessionPage({ api }) {
           h('h2', { style: style.sectionTitle }, '会话列表'),
           h('span', { style: style.chip }, String(sessionOptions.length))),
         sessionOptions.length > 0
-          ? h('div', { style: style.sessions, className: 'mai-session-list' }, sessionOptions.map(session => {
+          ? h('div', { style: style.sessionList, className: 'mai-session-list' }, sessionOptions.map(session => {
               const flag = session.stale ? '已过期' : session.deviceStatus && session.deviceStatus !== 'online' ? (session.deviceStatus === 'offline' ? '离线' : session.deviceStatus) : ''
               return h('button', {
                 style: { ...style.session, ...(session.id === sessionId ? style.selected : {}) },

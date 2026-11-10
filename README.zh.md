@@ -28,7 +28,7 @@ https://artenx.github.io/dsh-monkeyai-sessions/index.json
 npm install
 npm run build
 npm pack
-dsh plugin --profile web add ./dsh-monkeyai-sessions-0.1.12.tgz
+dsh plugin --profile web add ./dsh-monkeyai-sessions-0.1.13.tgz
 ```
 
 已在真实的 DSH `0.2.2-rc.1` web profile 与在线 MonkeyAI runtime 上端到端验证：授权、完整历史加载、指令下发、模型切换、回合取消均正常工作。
