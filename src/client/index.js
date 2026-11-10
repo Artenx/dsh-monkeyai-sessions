@@ -35,11 +35,11 @@ const style = {
   subtitle: { margin: 0, fontSize: 12, color: t.text3 },
   sectionTitle: { margin: 0, fontSize: 12, fontWeight: 650, color: t.text2, textTransform: 'uppercase', letterSpacing: '0.04em' },
   card: { display: 'grid', gap: 10, padding: 14, border: `1px solid ${t.border}`, borderRadius: 12, background: t.surface, boxShadow: '0 2px 8px rgba(16,24,40,0.035)' },
-  toolbarCard: { display: 'grid', gap: 10, padding: '13px 15px', border: `1px solid ${t.border}`, borderRadius: 12, background: t.surface, boxShadow: '0 2px 8px rgba(16,24,40,0.035)' },
+  toolbarCard: { display: 'grid', gap: 10, padding: '13px 15px', border: `1px solid ${t.border}`, borderRadius: 12, background: t.surface, backgroundImage: 'linear-gradient(90deg, #3568e8 0%, #8baaf4 46%, #e7edfc 100%)', backgroundSize: '100% 3px', backgroundPosition: '0 0', backgroundRepeat: 'no-repeat', boxShadow: '0 2px 8px rgba(16,24,40,0.035)' },
   workspace: { display: 'grid', gridTemplateColumns: 'minmax(248px, 292px) minmax(0, 1fr)', gap: 12, minWidth: 0, alignItems: 'stretch' },
   sessionSidebar: { display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto', gap: 10, minWidth: 0, padding: 12, border: `1px solid ${t.border}`, borderRadius: 12, background: t.surface, boxShadow: '0 2px 8px rgba(16,24,40,0.035)' },
   sessionList: { display: 'grid', gridTemplateColumns: '1fr', alignContent: 'start', gap: 6, minHeight: 0, overflowY: 'auto', padding: '1px 3px 2px 1px' },
-  thread: { display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto', gap: 10, minWidth: 0, height: 'min(70vh, 720px)', minHeight: 440, overflow: 'hidden', padding: 12 },
+  thread: { display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto', gap: 10, minWidth: 0, height: 'min(70vh, 720px)', minHeight: 440, padding: 12 },
   emptyThread: { display: 'grid', placeContent: 'center', justifyItems: 'center', gap: 9, minWidth: 0, padding: 28, border: `1px dashed ${t.border2}`, borderRadius: 12, background: 'linear-gradient(145deg, #ffffff 0%, #f8faff 100%)', textAlign: 'center' },
   row: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   label: { display: 'grid', gap: 4, flex: 1, minWidth: 180, fontSize: 12, fontWeight: 600, color: t.text2 },
@@ -89,8 +89,7 @@ const PANEL_CSS = `
 .mai-panel [data-events]::-webkit-scrollbar-thumb:hover { background: #b8c2cf; }
 .mai-panel .mai-card-hover { transition: border-color .15s, background .15s; }
 .mai-panel .mai-card-hover:not(:disabled):hover { border-color: #b9cdf3 !important; background: #f7faff !important; }
-.mai-panel .mai-toolbar { position: relative; overflow: hidden; }
-.mai-panel .mai-toolbar::before { content: ''; position: absolute; inset: 0 0 auto; height: 3px; background: linear-gradient(90deg, #3568e8 0%, #8baaf4 46%, #e7edfc 100%); }
+.mai-panel .mai-toolbar { position: relative; }
 .mai-panel .mai-workspace { display: grid; grid-template-columns: minmax(248px, 292px) minmax(0, 1fr); gap: 12px; min-width: 0; align-items: stretch; }
 .mai-panel .mai-session-sidebar { min-height: min(70vh, 720px); }
 .mai-panel .mai-session-list { scrollbar-gutter: stable; }
