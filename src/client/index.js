@@ -28,7 +28,7 @@ const t = {
 }
 
 const style = {
-  page: { display: 'grid', gap: 14, maxWidth: 1320, margin: '0 auto', padding: '18px 20px 24px', color: t.text, background: '#f7f8fb', height: '100%', minHeight: 0, overflowY: 'auto', boxSizing: 'border-box', alignContent: 'start', fontSize: 13, lineHeight: 1.5 },
+  page: { display: 'grid', gap: 14, width: '100%', maxWidth: 1320, minWidth: 0, margin: '0 auto', padding: '18px 20px 24px', color: t.text, background: '#f7f8fb', height: '100%', minHeight: 0, overflowY: 'auto', boxSizing: 'border-box', alignContent: 'start', fontSize: 13, lineHeight: 1.5 },
   header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingBottom: 2 },
   title: { margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: '-0.025em', color: '#182230' },
   eyebrow: { margin: 0, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.1em', color: t.text3, textTransform: 'uppercase' },
