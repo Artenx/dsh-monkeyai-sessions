@@ -28,12 +28,19 @@ const t = {
 }
 
 const style = {
-  page: { display: 'grid', gap: 12, maxWidth: 1080, margin: '0 auto', padding: '16px 18px 24px', color: t.text, height: '100%', minHeight: 0, overflowY: 'auto', boxSizing: 'border-box', alignContent: 'start', fontSize: 13, lineHeight: 1.5 },
+  page: { display: 'grid', gap: 14, maxWidth: 1320, margin: '0 auto', padding: '18px 20px 24px', color: t.text, background: '#f7f8fb', height: '100%', minHeight: 0, overflowY: 'auto', boxSizing: 'border-box', alignContent: 'start', fontSize: 13, lineHeight: 1.5 },
   header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingBottom: 2 },
-  title: { margin: 0, fontSize: 15, fontWeight: 650, letterSpacing: '-0.01em', color: t.text },
+  title: { margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: '-0.025em', color: '#182230' },
+  eyebrow: { margin: 0, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.1em', color: t.text3, textTransform: 'uppercase' },
   subtitle: { margin: 0, fontSize: 12, color: t.text3 },
   sectionTitle: { margin: 0, fontSize: 12, fontWeight: 650, color: t.text2, textTransform: 'uppercase', letterSpacing: '0.04em' },
-  card: { display: 'grid', gap: 10, padding: 14, border: `1px solid ${t.border}`, borderRadius: t.radiusLg, background: t.surface },
+  card: { display: 'grid', gap: 10, padding: 14, border: `1px solid ${t.border}`, borderRadius: 12, background: t.surface, boxShadow: '0 2px 8px rgba(16,24,40,0.035)' },
+  toolbarCard: { display: 'grid', gap: 10, padding: '13px 15px', border: `1px solid ${t.border}`, borderRadius: 12, background: t.surface, boxShadow: '0 2px 8px rgba(16,24,40,0.035)' },
+  workspace: { display: 'grid', gridTemplateColumns: 'minmax(248px, 292px) minmax(0, 1fr)', gap: 12, minWidth: 0, alignItems: 'stretch' },
+  sessionSidebar: { display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto', gap: 10, minWidth: 0, padding: 12, border: `1px solid ${t.border}`, borderRadius: 12, background: t.surface, boxShadow: '0 2px 8px rgba(16,24,40,0.035)' },
+  sessionList: { display: 'grid', gridTemplateColumns: '1fr', alignContent: 'start', gap: 6, minHeight: 0, overflowY: 'auto', padding: '1px 3px 2px 1px' },
+  thread: { display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto', gap: 10, minWidth: 0, height: 'min(70vh, 720px)', minHeight: 440, overflow: 'hidden', padding: 12 },
+  emptyThread: { display: 'grid', placeContent: 'center', justifyItems: 'center', gap: 9, minWidth: 0, minHeight: 'min(70vh, 720px)', padding: 28, border: `1px dashed ${t.border2}`, borderRadius: 12, background: 'linear-gradient(145deg, #ffffff 0%, #f8faff 100%)', textAlign: 'center' },
   row: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   label: { display: 'grid', gap: 4, flex: 1, minWidth: 180, fontSize: 12, fontWeight: 600, color: t.text2 },
   input: { width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: t.radius, border: `1px solid ${t.border2}`, background: t.surface, color: t.text, outline: 'none', fontSize: 13, transition: 'border-color .15s, box-shadow .15s' },
@@ -52,13 +59,13 @@ const style = {
   sessionTitle: { fontSize: 13, fontWeight: 650, lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   sessionMeta: { fontSize: 11.5, color: t.text3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   chip: { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 8px', borderRadius: 999, border: `1px solid ${t.border}`, background: t.surfaceAlt, fontSize: 11.5 },
-  events: { display: 'flex', flexDirection: 'column', gap: 8, height: '56vh', minHeight: 200, overflowY: 'auto', padding: '4px 6px 4px 2px' },
+  events: { display: 'flex', flexDirection: 'column', gap: 10, height: 'auto', minHeight: 0, overflowY: 'auto', padding: '6px 8px 8px 4px', overscrollBehavior: 'contain' },
   event: { padding: '8px 11px', borderRadius: t.radius, background: t.surfaceAlt, border: `1px solid ${t.border}`, overflowWrap: 'anywhere', color: t.text },
   bubbleWrap: { display: 'flex', gap: 8, alignItems: 'flex-start', width: '100%' },
   bubbleWrapUser: { display: 'flex', gap: 8, alignItems: 'flex-start', justifyContent: 'flex-end', width: '100%' },
   avatar: { width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#ffffff', flexShrink: 0, marginTop: 2 },
-  bubble: { maxWidth: '88%', minWidth: 0, flex: '0 1 auto', width: 'fit-content', borderRadius: t.radiusLg, padding: '8px 13px', background: t.surfaceAlt, border: `1px solid ${t.border}`, lineHeight: 1.55, fontSize: 13 },
-  bubbleUser: { maxWidth: '88%', minWidth: 0, flex: '0 1 auto', width: 'fit-content', borderRadius: t.radiusLg, padding: '8px 13px', background: t.accent, color: '#ffffff', lineHeight: 1.55, fontSize: 13 },
+  bubble: { maxWidth: '88%', minWidth: 0, flex: '0 1 auto', width: 'fit-content', borderRadius: 12, padding: '9px 13px', background: t.surface, border: `1px solid ${t.border}`, boxShadow: '0 1px 2px rgba(16,24,40,0.04)', lineHeight: 1.6, fontSize: 13 },
+  bubbleUser: { maxWidth: '88%', minWidth: 0, flex: '0 1 auto', width: 'fit-content', borderRadius: 12, padding: '9px 13px', background: '#315fe8', color: '#ffffff', boxShadow: '0 2px 5px rgba(49,95,232,0.18)', lineHeight: 1.6, fontSize: 13 },
   thought: { maxWidth: '88%', borderRadius: t.radiusLg, padding: '7px 11px', background: '#faf7fd', border: `1px solid #e8ddf5`, lineHeight: 1.5, fontSize: 12.5, color: '#5b4a72' },
   thoughtSummary: { cursor: 'pointer', color: '#6b4fa0', fontWeight: 650, fontSize: 10.5, letterSpacing: '0.05em', textTransform: 'uppercase', userSelect: 'none' },
   approval: { padding: '11px 13px', borderRadius: t.radiusLg, border: `1px solid #f0d98c`, background: '#fffbeb', display: 'grid', gap: 8 },
@@ -82,6 +89,36 @@ const PANEL_CSS = `
 .mai-panel [data-events]::-webkit-scrollbar-thumb:hover { background: #b8c2cf; }
 .mai-panel .mai-card-hover { transition: border-color .15s, background .15s; }
 .mai-panel .mai-card-hover:not(:disabled):hover { border-color: #b9cdf3 !important; background: #f7faff !important; }
+.mai-panel .mai-toolbar { position: relative; overflow: hidden; }
+.mai-panel .mai-toolbar::before { content: ''; position: absolute; inset: 0 0 auto; height: 3px; background: linear-gradient(90deg, #3568e8 0%, #8baaf4 46%, #e7edfc 100%); }
+.mai-panel .mai-workspace { display: grid; grid-template-columns: minmax(248px, 292px) minmax(0, 1fr); gap: 12px; min-width: 0; align-items: stretch; }
+.mai-panel .mai-session-sidebar { min-height: min(70vh, 720px); }
+.mai-panel .mai-session-list { scrollbar-gutter: stable; }
+.mai-panel .mai-session-card { position: relative; }
+.mai-panel .mai-session-card[aria-current='true']::before { content: ''; position: absolute; left: 0; top: 9px; bottom: 9px; width: 3px; border-radius: 0 3px 3px 0; background: #3568e8; }
+.mai-panel .mai-thread { height: min(70vh, 720px); min-height: 440px; }
+.mai-panel .mai-thread-events { height: auto !important; min-height: 0 !important; }
+.mai-panel .mai-empty-thread { min-height: min(70vh, 720px); }
+.mai-panel .mai-empty-mark { display: grid; place-items: center; width: 54px; height: 54px; border-radius: 17px; background: #edf2ff; color: #315fe8; box-shadow: inset 0 0 0 1px #dce6ff; }
+.mai-panel .mai-session-meta { overflow-wrap: anywhere; }
+@media (max-width: 900px) {
+  .mai-panel .mai-workspace { grid-template-columns: minmax(0, 1fr); }
+  .mai-panel .mai-session-sidebar { min-height: 0; grid-template-rows: auto minmax(0, auto) auto; }
+  .mai-panel .mai-session-list { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); max-height: 235px; }
+  .mai-panel .mai-thread { height: 68vh; min-height: 390px; }
+  .mai-panel .mai-empty-thread { min-height: 330px; }
+}
+@media (max-width: 560px) {
+  .mai-panel .mai-page-title { font-size: 16px !important; }
+  .mai-panel .mai-toolbar-controls { align-items: stretch; }
+  .mai-panel .mai-toolbar-controls select { flex-basis: 100% !important; }
+  .mai-panel .mai-session-list { grid-template-columns: 1fr !important; max-height: 210px; }
+  .mai-panel .mai-thread { height: 68vh; min-height: 360px; padding: 10px; }
+  .mai-panel .mai-thread-header { gap: 6px !important; }
+  .mai-panel .mai-thread-header strong { min-width: 100px; }
+  .mai-panel .mai-thread-header select { flex-basis: 100% !important; }
+  .mai-panel .mai-events { gap: 7px; }
+}
 @keyframes mai-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 .mai-panel .mai-pulse { animation: mai-pulse 1.2s ease-in-out infinite; }
 .mai-panel .mai-md > div:first-child > :first-child { margin-top: 0; }
@@ -901,9 +938,11 @@ function RemoteSessionPage({ api }) {
   return h('main', { style: style.page, className: 'mai-panel' },
     h('style', { dangerouslySetInnerHTML: { __html: PANEL_CSS } }),
     h('header', { style: style.header },
-      h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
-        h(MonkeyIcon, { size: 22 }),
-        h('h1', { style: style.title }, 'MonkeyAI 会话')),
+      h('div', { style: { display: 'grid', gap: 1 } },
+        h('p', { style: style.eyebrow }, '远程工作区'),
+        h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+          h(MonkeyIcon, { size: 22 }),
+          h('h1', { style: style.title, className: 'mai-page-title' }, 'MonkeyAI 会话'))),
       h(StatusBadge, { status, live: isLive })),
     error ? h('div', { role: 'alert', style: style.error },
       h('span', { style: { flex: 1 } }, error),
@@ -987,11 +1026,13 @@ function RemoteSessionPage({ api }) {
             h('p', { style: { margin: 0, fontSize: 12, color: t.text3 } }, '浏览器授权需要回调能访问到本机 Host。手机上请改用上方账号登录。'))),
         accounts.length > 0 ? h('p', { style: { margin: 0, fontSize: 12, color: t.text3 } }, '已连接的账号会出现在设备列表上方的账号选择器中。') : null))
       : null,
-    currentAccount ? h('section', { style: style.card },
-      h('div', { style: style.row },
-        h('h2', { style: { ...style.sectionTitle, flex: 1 } }, '远程会话'),
-        h('span', { style: { fontSize: 11, color: t.text3 } }, currentAccount.scopes.filter(s => s !== 'device:connect').join(' · '))),
-      h('div', { style: style.row },
+    currentAccount ? h('section', { style: style.toolbarCard, className: 'mai-toolbar' },
+      h('div', { style: style.row, className: 'mai-toolbar-heading' },
+        h('div', { style: { display: 'grid', gap: 1, flex: 1, minWidth: 0 } },
+          h('h2', { style: style.sectionTitle }, '远程会话'),
+          h('p', { style: style.subtitle }, '选择设备，继续处理 MonkeyAI 会话')),
+        h('span', { style: style.chip }, currentAccount.scopes.filter(s => s !== 'device:connect').join(' · '))),
+      h('div', { style: style.row, className: 'mai-toolbar-controls' },
         h('select', { style: { ...style.input, flex: '1 1 200px' }, value: accountId, onChange: event => setAccountId(event.target.value), 'aria-label': '已授权账号' },
           accounts.map(account => h('option', { key: account.accountId, value: account.accountId }, account.serverOrigin))),
         h('button', { type: 'button', style: { ...style.button, flex: '0 0 auto', padding: '6px 10px', fontWeight: 700 }, disabled: loading || addingServer, onClick: () => { setAddingServer(true); setServerAddress(''); setAuthorizationRequestId(''); setAuthorizationUrl(''); setAuthorizationMode(''); setCallbackUrl(''); setStatus('请输入 MonkeyAI 服务器地址') }, title: '授权另一个 MonkeyAI 服务器' }, '+ 添加服务器'),
@@ -1053,27 +1094,38 @@ function RemoteSessionPage({ api }) {
               type: 'button', style: style.primaryButton, flex: '0 0 auto',
               disabled: loading || !machineId || !newSessionCwd.trim() || newSessionBusy,
               onClick: createRemoteSession,
-            }, newSessionBusy ? '创建中…' : '创建')))),
-      sessionOptions.length > 0
-        ? h('div', { style: style.sessions }, sessionOptions.map(session => {
-            const flag = session.stale ? '已过期' : session.deviceStatus && session.deviceStatus !== 'online' ? (session.deviceStatus === 'offline' ? '离线' : session.deviceStatus) : ''
-            return h('button', {
-              style: { ...style.session, ...(session.id === sessionId ? style.selected : {}) },
-              className: 'mai-card-hover',
-              key: session.id,
-              type: 'button',
-              disabled: !session.cwd,
-              onClick: () => openSession(session),
-              title: session.cwd ? `打开 ${session.cwd}` : 'ACP 会话列表未提供工作目录',
-            },
-              h('span', { style: style.sessionTitle }, session.title || session.id),
-              h('span', { style: style.sessionMeta }, session.cwd || '加载历史需要 runtime 提供工作目录'),
-              flag !== '' ? h('span', { style: { fontSize: 10.5, fontWeight: 650, color: session.stale ? t.text3 : '#8a6d1d', textTransform: 'uppercase', letterSpacing: '0.04em' } }, flag) : null)
-          }))
-        : h('p', { style: style.subtitle }, machineId ? '该设备暂无会话。可在上方新建，或点击刷新。' : '请选择设备以列出其会话。'))
+            }, newSessionBusy ? '创建中…' : '创建')))))
       : null,
-    sessionId ? h('section', { style: style.card },
-      h('div', { style: style.row },
+    currentAccount ? h('div', { className: 'mai-workspace' },
+      h('aside', { style: style.sessionSidebar, className: 'mai-session-sidebar' },
+        h('div', { style: { ...style.row, justifyContent: 'space-between' } },
+          h('h2', { style: style.sectionTitle }, '会话列表'),
+          h('span', { style: style.chip }, String(sessionOptions.length))),
+        sessionOptions.length > 0
+          ? h('div', { style: style.sessions, className: 'mai-session-list' }, sessionOptions.map(session => {
+              const flag = session.stale ? '已过期' : session.deviceStatus && session.deviceStatus !== 'online' ? (session.deviceStatus === 'offline' ? '离线' : session.deviceStatus) : ''
+              return h('button', {
+                style: { ...style.session, ...(session.id === sessionId ? style.selected : {}) },
+                className: 'mai-card-hover mai-session-card',
+                'aria-current': session.id === sessionId ? 'true' : undefined,
+                key: session.id,
+                type: 'button',
+                disabled: !session.cwd,
+                onClick: () => openSession(session),
+                title: session.cwd ? `打开 ${session.cwd}` : 'ACP 会话列表未提供工作目录',
+              },
+                h('span', { style: style.sessionTitle }, session.title || session.id),
+                h('span', { style: style.sessionMeta, className: 'mai-session-meta' }, session.cwd || '加载历史需要 runtime 提供工作目录'),
+                flag !== '' ? h('span', { style: { fontSize: 10.5, fontWeight: 650, color: session.stale ? t.text3 : '#8a6d1d', textTransform: 'uppercase', letterSpacing: '0.04em' } }, flag) : null)
+            }))
+          : h('div', { style: { display: 'grid', justifyItems: 'center', gap: 7, padding: '22px 12px', textAlign: 'center' } },
+              h('span', { style: { ...style.avatar, width: 34, height: 34, background: t.surfaceAlt, color: t.text3, fontSize: 17 } }, '·'),
+              h('span', { style: { fontSize: 12, fontWeight: 600, color: t.text2 } }, machineId ? '这里还没有会话' : '请选择远程设备'),
+              h('span', { style: { fontSize: 11, color: t.text3 } }, machineId ? '刷新会话或创建一个新会话' : '会话列表会显示在这里')),
+        h('div', { style: { borderTop: `1px solid ${t.border}`, paddingTop: 8 } },
+          h('p', { style: { margin: 0, fontSize: 10.5, color: t.text3 } }, machineId ? '会话来自所选设备的 runtime' : '连接设备后查看会话'))),
+      sessionId ? h('section', { style: { ...style.card, ...style.thread }, className: 'mai-thread' },
+      h('div', { style: style.row, className: 'mai-thread-header' },
         h('button', {
           type: 'button', style: { ...style.button, flexShrink: 0 }, title: '关闭会话并返回列表',
           onClick: () => { streamGenerationRef.current += 1; streamRef.current?.dispose(); streamRef.current = null; setSessionId(''); setTurnActive(false); setStopping(false); setSessionStatus(''); setStatus('远程会话已关闭') },
@@ -1105,7 +1157,7 @@ function RemoteSessionPage({ api }) {
             ? h('option', { value: currentModel }, currentModel.slice(0, 24))
             : null,
           models.map(m => h('option', { key: m.id, value: m.id }, `${m.displayName} (${Math.round(m.contextWindowTokens / 1000)}k)`)))),
-      h('div', { style: style.events, 'aria-live': 'polite', 'data-events': '', ref: eventsRef,
+      h('div', { style: style.events, className: 'mai-thread-events mai-events', 'aria-live': 'polite', 'data-events': '', ref: eventsRef,
           onScroll: event => {
             const el = event.currentTarget
             if (el.scrollTop < 60 && visibleCount < displayEntries.length) {
@@ -1209,7 +1261,12 @@ function RemoteSessionPage({ api }) {
       lastDelivery || turnActive ? h('div', { style: { fontSize: 11.5, color: turnActive ? t.accent : lastDelivery?.accepted ? t.success : lastDelivery?.frame === 'pending' ? t.text3 : t.danger, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 } },
         turnActive ? h('span', { className: 'mai-pulse', style: { ...style.dot, background: t.accent } }) : null,
         turnActive ? (stopping ? '正在停止当前回合…' : 'MonkeyAI 正在处理…') : lastDelivery?.accepted ? '回合已结束' : lastDelivery?.frame === 'pending' ? '等待投递' : '投递被拒绝') : null)
-      : null)
+      : h('section', { style: style.emptyThread, className: 'mai-empty-thread' },
+          h('div', { className: 'mai-empty-mark' }, h(MonkeyIcon, { size: 26 })),
+          h('p', { style: style.eyebrow }, '远程会话'),
+          h('h2', { style: { margin: 0, fontSize: 18, fontWeight: 650, color: '#182230' } }, '选择一个会话'),
+          h('p', { style: { ...style.subtitle, maxWidth: 300 } }, sessionOptions.length > 0 ? '从左侧选择会话，在此继续对话。' : machineId ? '当前设备还没有会话。可在上方新建或刷新。' : '先选择一个远程设备。'))
+    ) : null)
 }
 
 function MonkeyIcon({ size = 18 }) {
