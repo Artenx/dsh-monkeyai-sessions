@@ -30,6 +30,8 @@ class FakeWebSocket extends EventTarget {
   static configurationRevision = 7
   static initializeParams = []
   static historyReadCount = 0
+  static holdNextPromptResponse = false
+  static releasePromptResponse = null
 
   constructor(url, protocols) {
     super()
@@ -126,6 +128,8 @@ function installAcpAgent() {
   FakeWebSocket.configurationRevision = 7
   FakeWebSocket.initializeParams = []
   FakeWebSocket.historyReadCount = 0
+  FakeWebSocket.holdNextPromptResponse = false
+  FakeWebSocket.releasePromptResponse = null
   FakeWebSocket.onClientMessage = (socket, message) => {
     if (message.method === 'initialize') {
       FakeWebSocket.initializeParams.push(message.params)
@@ -164,7 +168,13 @@ function installAcpAgent() {
       return
     }
     if (message.method === 'session/prompt') {
-      socket.serverSend({ jsonrpc: '2.0', id: message.id, result: {} })
+      const promptResponse = { jsonrpc: '2.0', id: message.id, result: {} }
+      if (FakeWebSocket.holdNextPromptResponse) {
+        FakeWebSocket.holdNextPromptResponse = false
+        FakeWebSocket.releasePromptResponse = () => socket.serverSend(promptResponse)
+      } else {
+        socket.serverSend(promptResponse)
+      }
       const promptText = message.params?.prompt?.[0]?.text ?? ''
       const isExternal = promptText === 'external client prompt'
       const update = { jsonrpc: '2.0', method: 'session/update', params: {
@@ -374,10 +384,23 @@ test('followSession streams history and live notifications for the selected sess
     await waitFor(() => frames.some(frame => frame.type === 'notification'
       && frame.data?.update?.content?.text === ' live continuation'), 'live continuation of snapshot message')
 
+    FakeWebSocket.holdNextPromptResponse = true
     uplink.push({ type: 'prompt', text: 'run the task' })
-    await waitFor(() => frames.some(frame => frame.type === 'delivery' && frame.data?.accepted), 'delivery accepted')
     await waitFor(() => frames.some(frame => frame.type === 'notification'
-      && frame.data?.update?.content?.text === 'working on it'), 'live notification')
+      && frame.data?.update?.content?.text === 'working on it'), 'live notification while prompt is pending')
+    assert.equal(frames.some(frame => frame.type === 'delivery' && frame.data?.accepted), false)
+
+    requestSocket.serverSend({ jsonrpc: '2.0', id: 'question-during-prompt', method: 'elicitation/create', params: {
+      mode: 'text', message: 'Choose an environment to continue.',
+    } })
+    await waitFor(() => frames.some(frame => frame.type === 'request'
+      && frame.requestId === 'question-during-prompt'), 'question during active prompt')
+    uplink.push({ type: 'respond', requestId: 'question-during-prompt', result: { action: 'accept', content: { text: 'staging' } } })
+    await waitFor(() => requestSocket.sent.some(message => message.id === 'question-during-prompt'
+      && message.result?.action === 'accept'), 'answer while prompt is pending')
+    FakeWebSocket.releasePromptResponse?.()
+    FakeWebSocket.releasePromptResponse = null
+    await waitFor(() => frames.some(frame => frame.type === 'delivery' && frame.data?.accepted), 'delivery accepted')
 
     // A second MonkeyAI client sends into the same session. Its turn must be
     // broadcast over the already loaded DSH subscription without a refresh.

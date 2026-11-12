@@ -1118,6 +1118,7 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
       const uplink = this.ctx.invocation?.uplink()
       if (!uplink) throw new Error('Remote session command channel is unavailable')
       uplinkIterator = uplink[Symbol.asyncIterator]()
+      let promptInFlight = false
 
       commandPump = (async () => {
         while (!signal.aborted) {
@@ -1172,24 +1173,38 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
             }
 
             if (command.type === 'prompt') {
-              try {
-                // session/prompt resolves only when the whole turn finishes;
-                // long turns on big sessions can take many minutes. Streamed
-                // session/update frames reach the panel while it runs.
-                const result = await currentAcp.request('session/prompt', {
-                  sessionId: selectedSession,
-                  prompt: [{ type: 'text', text: command.text }],
-                }, { signal, timeoutMs: 1_800_000 })
-                emit({ type: 'delivery', sessionId: selectedSession, data: { accepted: true, result } })
-              } catch (promptError) {
-                if (signal.aborted) return
+              if (promptInFlight) {
                 emit({
                   type: 'delivery',
                   sessionId: selectedSession,
-                  data: { accepted: false, code: 'remote_rejected' },
-                  message: promptError instanceof Error ? promptError.message : '远程 runtime 拒绝了该指令',
+                  data: { accepted: false, code: 'turn_in_progress' },
+                  message: '当前回合仍在执行，请等待完成后再下发新指令',
                 })
+                continue
               }
+              promptInFlight = true
+              const promptAcp = currentAcp
+              void (async () => {
+                try {
+                  // Let the command pump process answers and cancellation while
+                  // session/prompt waits for the remote turn to finish.
+                  const result = await promptAcp.request('session/prompt', {
+                    sessionId: selectedSession,
+                    prompt: [{ type: 'text', text: command.text }],
+                  }, { signal, timeoutMs: 1_800_000 })
+                  emit({ type: 'delivery', sessionId: selectedSession, data: { accepted: true, result } })
+                } catch (promptError) {
+                  if (signal.aborted) return
+                  emit({
+                    type: 'delivery',
+                    sessionId: selectedSession,
+                    data: { accepted: false, code: 'remote_rejected' },
+                    message: promptError instanceof Error ? promptError.message : '远程 runtime 拒绝了该指令',
+                  })
+                } finally {
+                  promptInFlight = false
+                }
+              })()
               continue
             }
 
