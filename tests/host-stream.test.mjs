@@ -342,6 +342,27 @@ test('followSession streams history and live notifications for the selected sess
       && frame.method === '_monkeyai/session/model'
       && frame.data?.model === 'model-current'), 'early model notification')
 
+    // MCP elicitation requests may omit sessionId because this ACP socket is
+    // already mounted to the selected session. The question must reach the
+    // panel and remain answerable through the same request id.
+    const requestSocket = FakeWebSocket.instances[0]
+    requestSocket.serverSend({ jsonrpc: '2.0', id: 'question-1', method: 'elicitation/create', params: {
+      mode: 'text', message: 'Which environment should I use?',
+    } })
+    await waitFor(() => frames.some(frame => frame.type === 'request'
+      && frame.method === 'elicitation/create'
+      && frame.data?.message === 'Which environment should I use?'), 'elicitation question')
+    const questionFrame = frames.find(frame => frame.type === 'request' && frame.requestId === 'question-1')
+    assert.equal(questionFrame.sessionId, 'history-session')
+    requestSocket.serverSend({ jsonrpc: '2.0', id: 'question-other-session', method: 'elicitation/create', params: {
+      sessionId: 'another-session', mode: 'text', message: 'This belongs to another session',
+    } })
+    assert.equal(frames.some(frame => frame.type === 'request' && frame.requestId === 'question-other-session'), false)
+    uplink.push({ type: 'respond', requestId: 'question-1', result: { action: 'accept', content: { text: 'staging' } } })
+    await waitFor(() => requestSocket.sent.some(message => message.id === 'question-1'
+      && message.result?.action === 'accept'
+      && message.result?.content?.text === 'staging'), 'elicitation response')
+
     // If the panel opens mid-turn, the HTTP snapshot may already contain a
     // partial message. Non-replay chunks with that same message id must still
     // pass through and append the remainder.

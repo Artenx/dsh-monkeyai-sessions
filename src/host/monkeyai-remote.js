@@ -792,8 +792,12 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
       newReplayKeysThisConnection = 0
       const unsubscribeThis = acp.subscribe(event => {
         if (currentAcp !== acp) return
-        if (event.params?.sessionId !== selectedSession) return
         if (event.kind === 'request') {
+          const requestSessionId = event.params?.sessionId
+          const sessionlessQuestion = requestSessionId === undefined && event.method === 'elicitation/create'
+          // elicitation/create follows the MCP request shape and may omit the
+          // ACP session id. This socket is already bound to selectedSession.
+          if (requestSessionId !== selectedSession && !sessionlessQuestion) return
           if (pendingRequests.size >= 64) {
             const reason = new Error('Remote session has too many pending requests')
             controller.abort(reason)
@@ -809,6 +813,7 @@ export class MonkeyAIRemoteService extends TypertRemoteService {
             data: event.params,
           })
         } else {
+          if (event.params?.sessionId !== selectedSession) return
           if (event.method === '_monkeyai/session/history_changed' && httpHistoryComplete && ticketHttpBase) {
             // Large live message bodies are persisted instead of streamed as
             // chunks. Match the desktop client: refresh the newest HTTP pages
